@@ -21,6 +21,7 @@
 from collections import namedtuple
 import configparser
 from datetime import datetime, timezone
+import importlib
 import json
 import os
 import shutil
@@ -697,6 +698,8 @@ def submit_job(job, cfg):
 
     if allow_update_slurm_opts:
         sys.path.append(job.working_dir)
+        det_submit_opts_modname = cfg[config.SECTION_BUILDENV].get(config.BUILDENV_SETTING_DET_SUBMIT_OPTS_MODNAME)
+        det_submit_opts = importlib.import_module(det_submit_opts_modname)
 
         try:
             from det_submit_opts import det_submit_opts  # pylint:disable=import-outside-toplevel

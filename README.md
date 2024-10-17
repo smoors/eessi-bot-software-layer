@@ -430,9 +430,14 @@ the account trying to trigger build jobs has no permission to do so.
 allow_update_submit_opts = false
 ```
 `allow_update_submit_opts` determines whether or not to allow updating the submit
-options via custom module `det_submit_opts` provided by the pull request being
-processed.
+options via custom python module provided by the pull request
+being processed.
 
+```
+update_submit_opts_modname = MODULE_NAME
+```
+Replace `MODULE_NAME` with the name of custom python module used to determine
+updated submit options (default is `det_submit_opts`)
 
 #### `[bot_control]` section
 
