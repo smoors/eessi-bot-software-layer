@@ -132,7 +132,7 @@ no_build_permission_comment = Label `bot:build` has been set by user `{build_lab
 # whether or not to allow updating the submit options via custom python module det_submit_opts
 allow_update_submit_opts = false
 
-# name of custom python module used to determine updated submit options (default: det_submit_opts)
+# name of custom python module used to determine updated submit options
 det_submit_opts_modname = det_submit_opts
 
 [deploycfg]
