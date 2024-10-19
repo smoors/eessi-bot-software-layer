@@ -692,21 +692,25 @@ def submit_job(job, cfg):
     else:
         time_limit = f"--time={DEFAULT_JOB_TIME_LIMIT}"
 
-    # update job.slurm_opts with det_submit_opts(job) in det_submit_opts.py if allowed and available
+    # update job.slurm_opts with det_submit_opts(job) in custom python module if allowed and available
     do_update_slurm_opts = False
     allow_update_slurm_opts = cfg[config.SECTION_BUILDENV].getboolean(config.BUILDENV_SETTING_ALLOW_UPDATE_SUBMIT_OPTS)
 
     if allow_update_slurm_opts:
         sys.path.append(job.working_dir)
         det_submit_opts_modname = cfg[config.SECTION_BUILDENV].get(config.BUILDENV_SETTING_DET_SUBMIT_OPTS_MODNAME)
-        det_submit_opts = importlib.import_module(det_submit_opts_modname)
 
-        try:
-            from det_submit_opts import det_submit_opts  # pylint:disable=import-outside-toplevel
-            do_update_slurm_opts = True
-        except ImportError:
+        if not det_submit_opts_modname:
             log(f"{fn}(): not updating job.slurm_opts: "
-                "cannot import function det_submit_opts from module det_submit_opts")
+                "config setting {config.BUILDENV_SETTING_DET_SUBMIT_OPTS_MODNAME} not set")
+        else:
+            try:
+                det_submit_opts = importlib.import_module(det_submit_opts_modname)
+                from det_submit_opts import det_submit_opts  # pylint:disable=import-outside-toplevel
+                do_update_slurm_opts = True
+            except ImportError:
+                log(f"{fn}(): not updating job.slurm_opts: "
+                    "cannot import function det_submit_opts from module {det_submit_opts_modname}")
 
     if do_update_slurm_opts:
         job = job._replace(slurm_opts=det_submit_opts(job))
