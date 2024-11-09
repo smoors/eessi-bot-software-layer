@@ -498,7 +498,7 @@ def prepare_buildenv_file(job_dir, buildenv):
         None (implicitly)
     """
     content = '\n'.join(f'export {x}' for x in buildenv.split(','))
-    with open(os.path.join(job_dir, 'bot'), 'w') as file:
+    with open(os.path.join(job_dir, 'bot', 'build_env.sh'), 'w') as file:
         file.write(content)
 
 
