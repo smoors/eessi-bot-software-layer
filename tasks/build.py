@@ -601,7 +601,7 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
             prepare_job_cfg(job_dir, build_env_cfg, repocfg, repo_id, cpu_target, os_type, accelerator)
 
             if buildenv:
-                prepare_buildenv_file(buildenv, job_dir)
+                prepare_buildenv_file(job_dir, buildenv)
 
             # enlist jobs to proceed
             job = Job(job_dir, arch, repo_id, slurm_opt, year_month, pr_id, accelerator)
