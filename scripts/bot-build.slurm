@@ -23,6 +23,14 @@
 #    for example, repos.cfg and configuration file bundles for repositories
 
 echo "Starting bot-build.slurm"
+BUILD_ENV_SCRIPT=bot/build_env.sh
+if [ -f ${BUILD_ENV_SCRIPT} ]; then
+    echo "${BUILD_ENV_SCRIPT} script found in '${PWD}', so sourcing it!"
+    source ${BUILD_ENV_SCRIPT}
+else
+    echo "could not find ${BUILD_ENV_SCRIPT} script in '${PWD}', skipping" >&2
+fi
+echo "$BUILD_ENV_SCRIPT finished"
 BOT_BUILD_SCRIPT=bot/build.sh
 if [ -f ${BOT_BUILD_SCRIPT} ]; then
     echo "${BOT_BUILD_SCRIPT} script found in '${PWD}', so running it!"

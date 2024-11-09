@@ -25,11 +25,13 @@ from pyghee.utils import log
 # prefix OR we have to change the handling of filters.
 FILTER_COMPONENT_ACCEL = 'accelerator'
 FILTER_COMPONENT_ARCH = 'architecture'
+FILTER_COMPONENT_BUILDENV = 'buildenv'
 FILTER_COMPONENT_INST = 'instance'
 FILTER_COMPONENT_JOB = 'job'
 FILTER_COMPONENT_REPO = 'repository'
 FILTER_COMPONENTS = [FILTER_COMPONENT_ACCEL,
                      FILTER_COMPONENT_ARCH,
+                     FILTER_COMPONENT_BUILDENV,
                      FILTER_COMPONENT_INST,
                      FILTER_COMPONENT_JOB,
                      FILTER_COMPONENT_REPO

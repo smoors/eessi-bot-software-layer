@@ -463,6 +463,45 @@ def apply_cvmfs_customizations(cvmfs_customizations, arch_job_dir):
             #      for now, only existing mappings may be customized
 
 
+def get_filter_component(components, component_name):
+    """
+    Get action filter component from filter components
+
+    Args:
+        components(list)
+
+    Returns:
+        (string): component
+    """
+    fn = sys._getframe().f_code.co_name
+
+    component = None
+    if len(components) == 1:
+        component = components[0]
+    elif len() > 1:
+        log(f"{fn}(): found more than one ({len(components)}) {component_name} requirement")
+    else:
+        log(f"{fn}(): found no {component_name} requirement")
+
+    return component
+
+
+def prepare_buildenv_file(job_dir, buildenv):
+    """
+    Set up build environment file 'build_env.sh' in directory <job_dir>/bot
+
+    Args:
+        job_dir (string): working directory of the job
+        buildenv: (string) comma-separated list of environment variables of the form VAR=VALUE
+
+    Returns:
+        None (implicitly)
+    """
+    content = '\n'.join(f'export {x}' for x in buildenv.split(','))
+    with open(os.path.join(job_dir, bot), 'w') as file:
+        file.write(content)
+
+
 def prepare_jobs(pr, cfg, event_info, action_filter):
     """
     Prepare all jobs whose context matches the given filter. Preparation includes
@@ -501,14 +540,11 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
 
     # determine accelerator from action_filter argument
     accelerators = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_ACCEL)
-    if len(accelerators) == 1:
-        accelerator = accelerators[0]
-    elif len(accelerators) > 1:
-        log(f"{fn}(): found more than one ({len(accelerators)}) accelerator requirement")
-        accelerator = None
-    else:
-        log(f"{fn}(): found no accelerator requirement")
-        accelerator = None
+    accelerator = get_filter_component(accelerators, 'accelerator')
+
+    # determine buildenv from action_filter argument
+    buildenvs = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_BUILDENV)
+    buildenv = get_filter_component(buildenvs, 'buildenv')
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
@@ -563,6 +599,9 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
                 f", accelerator = '{accelerator}'")
 
             prepare_job_cfg(job_dir, build_env_cfg, repocfg, repo_id, cpu_target, os_type, accelerator)
+
+            if buildenv:
+                prepare_buildenv_file(buildenv, job_dir)
 
             # enlist jobs to proceed
             job = Job(job_dir, arch, repo_id, slurm_opt, year_month, pr_id, accelerator)
