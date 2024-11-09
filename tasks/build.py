@@ -478,7 +478,7 @@ def get_filter_component(components, component_name):
     component = None
     if len(components) == 1:
         component = components[0]
-    elif len() > 1:
+    elif len(components) > 1:
         log(f"{fn}(): found more than one ({len(components)}) {component_name} requirement")
     else:
         log(f"{fn}(): found no {component_name} requirement")
@@ -498,7 +498,7 @@ def prepare_buildenv_file(job_dir, buildenv):
         None (implicitly)
     """
     content = '\n'.join(f'export {x}' for x in buildenv.split(','))
-    with open(os.path.join(job_dir, bot), 'w') as file:
+    with open(os.path.join(job_dir, 'bot'), 'w') as file:
         file.write(content)
 
 
