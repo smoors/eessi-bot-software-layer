@@ -11,6 +11,7 @@
 
 # Standard library imports
 import re
+import shlex
 import sys
 
 # Third party imports (anything installed into the local Python environment)
@@ -82,8 +83,7 @@ class EESSIBotCommand:
         """
         # TODO add function name to log messages
         # cmd_as_list = cmd_str.split()
-        pattern = r'".*?"|\'.*?\'|\S+'
-        cmd_as_list = re.findall(pattern, cmd_str)
+        cmd_as_list = shlex.split(cmd_str)
         self.command = cmd_as_list[0]
         # TODO always init self.action_filters with empty EESSIBotActionFilter?
         if len(cmd_as_list) > 1:
