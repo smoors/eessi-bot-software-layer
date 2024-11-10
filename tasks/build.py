@@ -46,6 +46,8 @@ _ERROR_GIT_CHECKOUT = "git checkout"
 _ERROR_GIT_CLONE = "curl"
 _ERROR_NONE = "none"
 
+# constants
+EXPORT_VARS_FILE = 'export_vars.sh'
 
 Job = namedtuple('Job', ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator'))
 
@@ -465,7 +467,8 @@ def apply_cvmfs_customizations(cvmfs_customizations, arch_job_dir):
 
 def get_filter_component(components, component_name):
     """
-    Get action filter component from filter components
+    Get action filter component from list of filter components if exactly 1
+    component is present, otherwise return None.
 
     Args:
         components(list)
@@ -486,19 +489,21 @@ def get_filter_component(components, component_name):
     return component
 
 
-def prepare_buildenv_file(job_dir, buildenv):
+def prepare_export_vars_file(job_dir, exportvars):
     """
-    Set up build environment file 'build_env.sh' in directory <job_dir>/bot
+    Set up EXPORT_VARS_FILE in directory <job_dir>/bot. This file will be
+    sourced before running the bot/build.sh script.
 
     Args:
         job_dir (string): working directory of the job
-        buildenv: (string) comma-separated list of environment variables of the form VAR=VALUE
+        exportvars (string): string of comma-separated variables of the form
+        VAR=VALUE to be exported
 
     Returns:
         None (implicitly)
     """
-    content = '\n'.join(f'export {x}' for x in buildenv.split(','))
-    with open(os.path.join(job_dir, 'bot', 'build_env.sh'), 'w') as file:
+    content = '\n'.join(f'export {x}' for x in exportvars.split(','))
+    with open(os.path.join(job_dir, 'bot', EXPORT_VARS_FILE), 'w') as file:
         file.write(content)
 
 
@@ -539,12 +544,14 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
     year_month, pr_id, run_dir = create_pr_dir(pr, cfg, event_info)
 
     # determine accelerator from action_filter argument
-    accelerators = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_ACCEL)
-    accelerator = get_filter_component(accelerators, 'accelerator')
+    accel_component = tools_filter.FILTER_COMPONENT_ACCEL
+    accelerators = action_filter.get_filter_by_component(accel_component)
+    accelerator = get_filter_component(accelerators, accel_component)
 
-    # determine buildenv from action_filter argument
-    buildenvs = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_BUILDENV)
-    buildenv = get_filter_component(buildenvs, 'buildenv')
+    # determine exportvars from action_filter argument
+    export_component = tools_filter.FILTER_COMPONENT_EXPORT
+    exportvars_list = action_filter.get_filter_by_component(export_component)
+    exportvars = get_filter_component(exportvars_list, export_component)
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
@@ -600,8 +607,8 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
 
             prepare_job_cfg(job_dir, build_env_cfg, repocfg, repo_id, cpu_target, os_type, accelerator)
 
-            if buildenv:
-                prepare_buildenv_file(job_dir, buildenv)
+            if exportvars:
+                prepare_export_vars_file(job_dir, exportvars)
 
             # enlist jobs to proceed
             job = Job(job_dir, arch, repo_id, slurm_opt, year_month, pr_id, accelerator)
