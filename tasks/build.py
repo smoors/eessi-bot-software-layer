@@ -496,13 +496,15 @@ def prepare_export_vars_file(job_dir, exportvars):
 
     Args:
         job_dir (string): working directory of the job
-        exportvars (string): string of comma-separated variables of the form
-        VAR=VALUE to be exported
+        # exportvars (string): string of comma-separated variables of the form
+        # VAR=VALUE to be exported
+        exportvars (list): list of strings of the form VAR=VALUE to be exported
 
     Returns:
         None (implicitly)
     """
-    content = '\n'.join(f'export {x}' for x in exportvars.split(','))
+    # content = '\n'.join(f'export {x}' for x in exportvars.split(','))
+    content = '\n'.join(f'export {x}' for x in exportvars)
     with open(os.path.join(job_dir, 'bot', EXPORT_VARS_FILE), 'w') as file:
         file.write(content)
 
@@ -550,8 +552,9 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
 
     # determine exportvars from action_filter argument
     export_component = tools_filter.FILTER_COMPONENT_EXPORT
-    exportvars_list = action_filter.get_filter_by_component(export_component)
-    exportvars = get_filter_component(exportvars_list, export_component)
+    # exportvars_list = action_filter.get_filter_by_component(export_component)
+    # exportvars = get_filter_component(exportvars_list, export_component)
+    exportvars = action_filter.get_filter_by_component(export_component)
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
