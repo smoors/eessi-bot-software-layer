@@ -83,7 +83,7 @@ class EESSIBotCommand:
         # TODO add function name to log messages
         # cmd_as_list = cmd_str.split()
         pattern = r'".*?"|\'.*?\'|\S+'
-        cmd_as_list = re.findall(pattern, cmd)
+        cmd_as_list = re.findall(pattern, cmd_str)
         self.command = cmd_as_list[0]
         # TODO always init self.action_filters with empty EESSIBotActionFilter?
         if len(cmd_as_list) > 1:
