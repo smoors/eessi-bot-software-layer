@@ -11,7 +11,6 @@
 
 # Standard library imports
 import re
-import shlex
 import sys
 
 # Third party imports (anything installed into the local Python environment)
@@ -82,9 +81,7 @@ class EESSIBotCommand:
             Exception: if any other exception was caught
         """
         # TODO add function name to log messages
-        # cmd_as_list = cmd_str.split()
-        cmd_as_list = shlex.split(cmd_str)
-        log(f"cmd list: '{cmd_as_list}'")
+        cmd_as_list = cmd_str.split()
         self.command = cmd_as_list[0]
         # TODO always init self.action_filters with empty EESSIBotActionFilter?
         if len(cmd_as_list) > 1:

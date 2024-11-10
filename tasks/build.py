@@ -46,7 +46,7 @@ _ERROR_GIT_CHECKOUT = "git checkout"
 _ERROR_GIT_CLONE = "curl"
 _ERROR_NONE = "none"
 
-# constants
+# other constants
 EXPORT_VARS_FILE = 'export_vars.sh'
 
 Job = namedtuple('Job', ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator'))
@@ -465,30 +465,6 @@ def apply_cvmfs_customizations(cvmfs_customizations, arch_job_dir):
             #      for now, only existing mappings may be customized
 
 
-def get_filter_component(components, component_name):
-    """
-    Get action filter component from list of filter components if exactly 1
-    component is present, otherwise return None.
-
-    Args:
-        components(list)
-
-    Returns:
-        (string): component
-    """
-    fn = sys._getframe().f_code.co_name
-
-    component = None
-    if len(components) == 1:
-        component = components[0]
-    elif len(components) > 1:
-        log(f"{fn}(): found more than one ({len(components)}) {component_name} requirement")
-    else:
-        log(f"{fn}(): found no {component_name} requirement")
-
-    return component
-
-
 def prepare_export_vars_file(job_dir, exportvars):
     """
     Set up EXPORT_VARS_FILE in directory <job_dir>/bot. This file will be
@@ -496,17 +472,20 @@ def prepare_export_vars_file(job_dir, exportvars):
 
     Args:
         job_dir (string): working directory of the job
-        # exportvars (string): string of comma-separated variables of the form
-        # VAR=VALUE to be exported
-        exportvars (list): list of strings of the form VAR=VALUE to be exported
+        exportvars (list): strings of the form VAR=VALUE to be exported
 
     Returns:
         None (implicitly)
     """
-    # content = '\n'.join(f'export {x}' for x in exportvars.split(','))
+    fn = sys._getframe().f_code.co_name
+
     content = '\n'.join(f'export {x}' for x in exportvars)
-    with open(os.path.join(job_dir, 'bot', EXPORT_VARS_FILE), 'w') as file:
+    export_vars_path = os.path.join(job_dir, 'bot', EXPORT_VARS_FILE)
+
+    with open(export_vars_path), 'w') as file:
         file.write(content)
+
+    log(f"{fn}(): file '{export_vars_path}' written")
 
 
 def prepare_jobs(pr, cfg, event_info, action_filter):
@@ -546,15 +525,18 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
     year_month, pr_id, run_dir = create_pr_dir(pr, cfg, event_info)
 
     # determine accelerator from action_filter argument
-    accel_component = tools_filter.FILTER_COMPONENT_ACCEL
-    accelerators = action_filter.get_filter_by_component(accel_component)
-    accelerator = get_filter_component(accelerators, accel_component)
+    accelerators = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_ACCEL)
+    if len(accelerators) == 1:
+        accelerator = accelerators[0]
+    elif len(accelerators) > 1:
+        log(f"{fn}(): found more than one ({len(accelerators)}) accelerator requirement")
+        accelerator = None
+    else:
+        log(f"{fn}(): found no accelerator requirement")
+        accelerator = None
 
     # determine exportvars from action_filter argument
-    export_component = tools_filter.FILTER_COMPONENT_EXPORT
-    # exportvars_list = action_filter.get_filter_by_component(export_component)
-    # exportvars = get_filter_component(exportvars_list, export_component)
-    exportvars = action_filter.get_filter_by_component(export_component)
+    exportvars = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_EXPORT)
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
