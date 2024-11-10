@@ -482,10 +482,10 @@ def prepare_export_vars_file(job_dir, exportvars):
     content = '\n'.join(f'export {x}' for x in exportvars)
     export_vars_path = os.path.join(job_dir, 'bot', EXPORT_VARS_FILE)
 
-    with open(export_vars_path), 'w') as file:
+    with open(export_vars_path, 'w') as file:
         file.write(content)
 
-    log(f"{fn}(): file '{export_vars_path}' written")
+    log(f"{fn}(): created exported variables file {export_vars_path}")
 
 
 def prepare_jobs(pr, cfg, event_info, action_filter):
