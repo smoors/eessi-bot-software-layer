@@ -172,6 +172,26 @@ def get_architecture_targets(cfg):
     return arch_target_map
 
 
+def get_allowed_exportvars(cfg):
+    """
+    Obtain list of allowed export variables
+
+    Args:
+        cfg (ConfigParser): ConfigParser instance holding full configuration
+            (typically read from 'app.cfg')
+
+    Returns:
+        (list): list of allowed export variable-value pairs of the format VARIABLE=VALUE
+    """
+    fn = sys._getframe().f_code.co_name
+
+    buildenv = cfg[config.SECTION_BUILDENV]
+
+    allowed_exportvars = json.loads(buildenv.get(config.BUILDENV_SETTING_ALLOWED_EXPORTS, '[]'))
+    log(f"{fn}(): allowed_exportvars '{json.dumps(allowed_exportvars)}'")
+    return allowed_exportvars
+
+
 def get_repo_cfg(cfg):
     """
     Obtain mappings of architecture targets to repository identifiers and
@@ -509,6 +529,7 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
     build_env_cfg = get_build_env_cfg(cfg)
     arch_map = get_architecture_targets(cfg)
     repocfg = get_repo_cfg(cfg)
+    allowed_exportvars = get_allowed_exportvars(cfg)
 
     base_repo_name = pr.base.repo.full_name
     log(f"{fn}(): pr.base.repo.full_name '{base_repo_name}'")
@@ -537,6 +558,13 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
 
     # determine exportvars from action_filter argument
     exportvars = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_EXPORT)
+
+    # check if exportvar filters are allowed
+    if exportvars:
+        for exportvar in exportvars:
+            if exportvar not in allowed_exportvars:
+                log(f"{fn}(): filter {exportvar} not allowed, not running any jobs")
+                return []
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
