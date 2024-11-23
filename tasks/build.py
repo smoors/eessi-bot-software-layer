@@ -123,7 +123,7 @@ def get_build_env_cfg(cfg):
     cvmfs_customizations = {}
     try:
         cvmfs_customizations_str = buildenv.get(config.BUILDENV_SETTING_CVMFS_CUSTOMIZATIONS)
-        log("{fn}(): cvmfs_customizations '{cvmfs_customizations_str}'")
+        log(f"{fn}(): cvmfs_customizations '{cvmfs_customizations_str}'")
 
         if cvmfs_customizations_str is not None:
             cvmfs_customizations = json.loads(cvmfs_customizations_str)
@@ -495,7 +495,7 @@ def apply_cvmfs_customizations(cvmfs_customizations, arch_job_dir):
 
 def prepare_export_vars_file(job_dir, exportvars):
     """
-    Set up EXPORT_VARS_FILE in directory <job_dir>/bot. This file will be
+    Set up EXPORT_VARS_FILE in directory <job_dir>/cfg. This file will be
     sourced before running the bot/build.sh script.
 
     Args:
@@ -508,7 +508,7 @@ def prepare_export_vars_file(job_dir, exportvars):
     fn = sys._getframe().f_code.co_name
 
     content = '\n'.join(f'export {x}' for x in exportvars)
-    export_vars_path = os.path.join(job_dir, 'bot', EXPORT_VARS_FILE)
+    export_vars_path = os.path.join(job_dir, 'cfg', EXPORT_VARS_FILE)
 
     with open(export_vars_path, 'w') as file:
         file.write(content)
