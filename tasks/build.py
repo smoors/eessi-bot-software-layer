@@ -186,10 +186,18 @@ def get_allowed_exportvars(cfg):
     fn = sys._getframe().f_code.co_name
 
     buildenv = cfg[config.SECTION_BUILDENV]
+    allowed_str = buildenv.get(config.BUILDENV_SETTING_ALLOWED_EXPORTVARS)
+    allowed = []
 
-    allowed_exportvars = json.loads(buildenv.get(config.BUILDENV_SETTING_ALLOWED_EXPORTS, '[]'))
-    log(f"{fn}(): allowed_exportvars '{json.dumps(allowed_exportvars)}'")
-    return allowed_exportvars
+    if allowed_str:
+        try:
+            allowed = json.loads(allowed_str)
+        except json.JSONDecodeError as err:
+            print(err)
+            error(f"{fn}(): Value for allowed_exportvars ({allowed_str}) could not be decoded.")
+
+    log(f"{fn}(): allowed_exportvars '{json.dumps(allowed)}'")
+    return allowed
 
 
 def get_repo_cfg(cfg):
@@ -559,12 +567,12 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
     # determine exportvars from action_filter argument
     exportvars = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_EXPORT)
 
-    # check if exportvar filters are allowed
+    # all exportvar filters must be allowed in order to run any jobs
     if exportvars:
-        for exportvar in exportvars:
-            if exportvar not in allowed_exportvars:
-                log(f"{fn}(): filter {exportvar} not allowed, not running any jobs")
-                return []
+        not_allowed = [x for x in exportvars if x not in allowed_exportvars]
+        if not_allowed:
+            log(f"{fn}(): filter(s) {not_allowed} not allowed, not running jobs")
+            return []
 
     jobs = []
     for arch, slurm_opt in arch_map.items():
