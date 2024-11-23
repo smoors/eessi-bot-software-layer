@@ -571,7 +571,7 @@ def prepare_jobs(pr, cfg, event_info, action_filter):
     if exportvars:
         not_allowed = [x for x in exportvars if x not in allowed_exportvars]
         if not_allowed:
-            log(f"{fn}(): filter(s) {not_allowed} not allowed, not running jobs")
+            log(f"{fn}(): exportvariable(s) {not_allowed} not allowed")
             return []
 
     jobs = []
