@@ -45,6 +45,7 @@ REQUIRED_CONFIG = {
     config.SECTION_ARCHITECTURETARGETS: [
         config.ARCHITECTURETARGETS_SETTING_ARCH_TARGET_MAP],       # required
     config.SECTION_BOT_CONTROL: [
+        # config.BOT_CONTROL_SETTING_CHATLEVEL],                     # optional
         config.BOT_CONTROL_SETTING_COMMAND_PERMISSION,             # required
         config.BOT_CONTROL_SETTING_COMMAND_RESPONSE_FMT],          # required
     config.SECTION_BUILDENV: [
@@ -229,7 +230,7 @@ class EESSIBotSoftwareLayer(PyGHee):
                     comment_response=comment_response,
                     comment_result=''
                 )
-                issue_comment = create_comment(repo_name, pr_number, comment_body)
+                issue_comment = create_comment(repo_name, pr_number, comment_body, 'chatty')
             else:
                 self.log(f"account `{sender}` seems to be a bot instance itself, hence not creating a new PR comment")
             return
@@ -281,7 +282,7 @@ class EESSIBotSoftwareLayer(PyGHee):
                 comment_response=comment_response,
                 comment_result=''
             )
-            issue_comment = create_comment(repo_name, pr_number, comment_body)
+            issue_comment = create_comment(repo_name, pr_number, comment_body, 'chatty')
         else:
             self.log(f"update '{comment_response}' is considered to contain bot command ... not creating PR comment")
             # TODO we may want to report this back to the PR on GitHub, e.g.,
@@ -373,7 +374,7 @@ class EESSIBotSoftwareLayer(PyGHee):
                 comment_response=msg,
                 comment_result=''
             )
-            create_comment(repo_name, pr_number, comment_body)
+            create_comment(repo_name, pr_number, comment_body, 'basic')
         elif label == "bot:deploy":
             # run function to deploy built artefacts
             deploy_built_artefacts(pr, event_info)
@@ -420,10 +421,7 @@ class EESSIBotSoftwareLayer(PyGHee):
 
         # create comment to pull request
         repo_name = pr.base.repo.full_name
-        gh = github.get_instance()
-        repo = gh.get_repo(repo_name)
-        pull_request = repo.get_pull(pr.number)
-        issue_comment = pull_request.create_issue_comment(comment)
+        issue_comment = create_comment(repo_name, pr.number, comment, 'basic')
         return issue_comment
 
     def handle_pull_request_event(self, event_info, log_file=None):
@@ -571,7 +569,6 @@ class EESSIBotSoftwareLayer(PyGHee):
                  PyGithub, not the github from the internal connections module)
         """
         self.log("processing bot command 'status'")
-        gh = github.get_instance()
         repo_name = event_info['raw_request_body']['repository']['full_name']
         pr_number = event_info['raw_request_body']['issue']['number']
         status_table = request_bot_build_issue_comments(repo_name, pr_number)
@@ -588,9 +585,7 @@ class EESSIBotSoftwareLayer(PyGHee):
             comment_status += f"{status_table['url'][x]}|"
 
         self.log(f"Overview of finished builds: comment '{comment_status}'")
-        repo = gh.get_repo(repo_name)
-        pull_request = repo.get_pull(pr_number)
-        issue_comment = pull_request.create_issue_comment(comment_status)
+        issue_comment = create_comment(repo_name, pr_number, comment_status, 'minimal')
         return issue_comment
 
     def start(self, app, port=3000):
@@ -669,12 +664,9 @@ class EESSIBotSoftwareLayer(PyGHee):
             # 4) report move to pull request
 
             repo_name = pr.base.repo.full_name
-            gh = github.get_instance()
-            repo = gh.get_repo(repo_name)
-            pull_request = repo.get_pull(pr.number)
             clean_up_comment = self.cfg[config.SECTION_CLEAN_UP][config.CLEAN_UP_SETTING_MOVED_JOB_DIRS_COMMENT]
             moved_comment = clean_up_comment.format(job_dirs=job_dirs, trash_bin_dir=trash_bin_dir)
-            issue_comment = pull_request.create_issue_comment(moved_comment)
+            issue_comment = create_comment(repo_name, pr.number, moved_comment, 'chatty')
             return issue_comment
 
 

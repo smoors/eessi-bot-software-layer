@@ -24,12 +24,15 @@ from retry.api import retry_call
 
 # Local application imports (anything from EESSI/eessi-bot-software-layer)
 from connections import github
+from tools import config
 
 
 PRComment = namedtuple('PRComment', ('repo_name', 'pr_number', 'pr_comment_id'))
 
+CHATLEVELS = {'minimal': 1, 'basic': 2, 'chatty': 3}
 
-def create_comment(repo_name, pr_number, comment):
+
+def create_comment(repo_name, pr_number, comment, chatlevel):
     """
     Create a comment to a pull request on GitHub
 
@@ -37,11 +40,17 @@ def create_comment(repo_name, pr_number, comment):
         repo_name (string): name of the repository
         pr_number (int): number of the pull request within the repository
         comment (string): comment body
+        chatlevel (string): minimum chattiness level required to create the PR comment
 
     Returns:
         github.IssueComment.IssueComment instance or None (note, github refers to
             PyGithub, not the github from the internal connections module)
     """
+    cfg = config.read_config()
+    chatlevel_cfg = cfg[config.SECTION_BOT_CONTROL].get(config.BOT_CONTROL_SETTING_CHATLEVEL, 'basic')
+    if CHATLEVELS[chatlevel_cfg] < CHATLEVELS[chatlevel]:
+        return None
+
     gh = github.get_instance()
     repo = gh.get_repo(repo_name)
     pull_request = repo.get_pull(pr_number)

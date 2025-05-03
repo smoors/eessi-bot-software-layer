@@ -617,7 +617,8 @@ def deploy_built_artefacts(pr, event_info):
         repo_name = event_info["raw_request_body"]["repository"]["full_name"]
         pr_comments.create_comment(repo_name,
                                    pr.number,
-                                   no_deploy_permission_comment.format(deploy_labeler=labeler))
+                                   no_deploy_permission_comment.format(deploy_labeler=labeler),
+                                   'chatty')
         return
     else:
         log(f"{funcname}(): GH account '{labeler}' is authorized to deploy")
