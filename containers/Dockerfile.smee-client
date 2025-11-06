@@ -1,4 +1,4 @@
-ARG smee_client_version=4.4.1
+ARG smee_client_version=4.2.1
 ARG smee_client_version_commit=b837fa85fd05853731160e21356ffd30c8c3e791 # v4.4.1
 
 # pinning base image to specific hash (corresponding to lts-alpine)
