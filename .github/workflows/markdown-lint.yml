@@ -28,7 +28,7 @@ jobs:
 
       - name: Install markdownlint-cli
         run: npm install -g igorshubovych/markdownlint-cli#192ad822316c3a22fb3d3cc8aa6eafa0b8488360 # v0.45.0
-        #SHA from https://github.com/igorshubovych/markdownlint-cli/commit/192ad822316c3a22fb3d3cc8aa6eafa0b8488360
+        # SHA from https://github.com/igorshubovych/markdownlint-cli/commit/192ad822316c3a22fb3d3cc8aa6eafa0b8488360
 
       - name: Run markdownlint
         run: markdownlint "**/*.md" --ignore .git 
