@@ -3,6 +3,10 @@ ARG smee_client_version_commit=b837fa85fd05853731160e21356ffd30c8c3e791 # v4.4.1
 # pinning base image to specific hash (corresponding to lts-alpine)
 FROM node@sha256:f36fed0b2129a8492535e2853c64fbdbd2d29dc1219ee3217023ca48aebd3787
 ARG smee_client_version_commit
+# Remove any existing installation first
+RUN rm -rf /usr/local/lib/node_modules/smee-client /usr/local/lib/node_modules/.smee-client-*
+
+# Then install
 RUN npm install --global "probot/smee-client#${smee_client_version_commit}"
 ENTRYPOINT ["smee"]
 CMD ["--help"]
