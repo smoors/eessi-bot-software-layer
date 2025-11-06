@@ -9,6 +9,6 @@ ARG smee_client_version_commit
 # RUN rm -rf /usr/local/lib/node_modules/smee-client /usr/local/lib/node_modules/.smee-client-*
 
 # Then install
-RUN npm install --global probot/smee-client@${smee_client_version}
+RUN npm install --global smee-client@${smee_client_version}
 ENTRYPOINT ["smee"]
 CMD ["--help"]
