@@ -17,17 +17,11 @@ on: [push, pull_request]
 permissions: read-all
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        os: [ubuntu-24.04]
-        exclude:
-          - python-version: '3.7'
-            os: ubuntu-24.04
-        include:
-          - python-version: '3.7'
-            os: ubuntu-22.04
+        # Waitress 3.0.1 does not support Python 3.8 or older
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
       fail-fast: false
     steps:
       - name: checkout
