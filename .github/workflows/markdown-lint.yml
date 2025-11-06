@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.0
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install markdownlint-cli
         run: npm install -g igorshubovych/markdownlint-cli#192ad822316c3a22fb3d3cc8aa6eafa0b8488360 # v0.45.0
