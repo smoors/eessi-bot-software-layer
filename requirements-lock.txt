@@ -1,3 +1,5 @@
+# NOTE, this file is used with installing packages in CI. Do not use it for running
+#   bot components.
 # try to pin required versions using hashes
 # for some Python versions we may have to use different versions
 pip==25.3; python_version >= "3.9" \
