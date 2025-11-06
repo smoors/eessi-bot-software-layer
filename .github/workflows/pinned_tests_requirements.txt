@@ -6,8 +6,8 @@ pip==25.3; python_version >= "3.9" \
 exceptiongroup==1.3.0 \
     --hash=sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88
 
-iniconfig==2.2.0; python_version <= "3.9" \
-    --hash=sha256:1807d2bc2eb4231a5e40e2ecee093fc25fc0eb0e2840f01ea50a1d15380adbff
+iniconfig==2.1.0; python_version <= "3.9" \
+    --hash=sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7
 iniconfig==2.3.0; python_version >= "3.10" \
     --hash=sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730
 
@@ -16,6 +16,9 @@ packaging==25.0 \
 
 typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466
+
+pluggy==1.6.0 \
+    --hash=sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3
 
 pytest==8.4.2 \
     --hash=sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01
