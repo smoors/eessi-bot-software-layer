@@ -12,6 +12,6 @@
 #
 PyGithub
 Waitress
-cryptography
+cryptography>=42.0.0 # required to fix https://osv.dev/vulnerability/GHSA-3ww4-gg4f-jr7f
 PyGHee>=0.0.3
 retry
