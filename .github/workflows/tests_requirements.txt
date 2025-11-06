@@ -1,0 +1,4 @@
+# requirements file for tests.yaml workflow
+pytest==8.4.2 --hash=sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01
+pytest-cov==7.0.0 --hash=sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1
+
