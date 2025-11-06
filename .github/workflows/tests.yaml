@@ -36,7 +36,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pytest
+          python -m pip install pytest==8.4.2 \
+              --hash=sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01
           python -m pip install --upgrade flake8
 
       - name: Run test suite (without coverage)
@@ -45,7 +46,8 @@ jobs:
 
       - name: Run test suite (with coverage)
         run: |
-          python -m pip install pytest-cov
+          python -m pip install pytest-cov==7.0.0 \
+              --hash=sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1
           ./test.sh -q --cov=$PWD
 
       - name: Run flake8 to verify PEP8-compliance of Python code
