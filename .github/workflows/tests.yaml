@@ -35,7 +35,7 @@ jobs:
       - name: Install required Python packages + pytest + flake8
         run: |
           python -m pip install -r requirements.txt
-          python -m pip install -r requirements-pinned-tests.txt
+          python -m pip install -r requirements-tests.txt
 
       - name: Run test suite (without coverage)
         run: |
