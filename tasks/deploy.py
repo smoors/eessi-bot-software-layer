@@ -236,7 +236,7 @@ def append_artefact_to_upload_log(artefact, job_dir):
         upload_log.write(f"{job_plus_artefact}\n")
 
 
-def upload_artefact(job_dir, artefact, timestamp, repo_name, pr_number, pr_comment_id):
+def upload_artefact(job_dir, artefact, repo_name, pr_number, pr_comment_id):
     """
     Upload artefact to an S3 bucket.
 
@@ -244,7 +244,6 @@ def upload_artefact(job_dir, artefact, timestamp, repo_name, pr_number, pr_comme
         job_dir (string): path to the job directory
         artefact (string): can be any filename that contains the payload, e.g., for
             EESSI it could have the format eessi-VERSION-COMPONENT-OS-ARCH-TIMESTAMP.tar.zstd
-        timestamp (int): timestamp of the artefact
         repo_name (string): repository of the pull request
         pr_number (int): number of the pull request
         pr_comment_id (int): id of the pull request comment
@@ -517,6 +516,31 @@ def determine_successful_jobs(job_dirs):
     return successes
 
 
+def parse_artefact_filename(filename):
+    """
+    Determines components of an artefact's filename: prefix, timestamp, suffix
+
+    Args:
+        filename (string): name of artefact with format A-B-C-...-N-TIMESTAMP.tar(.gz|.zstd|...)
+
+    Returns:
+        tuple: (prefix, timestamp, suffix) or None if pattern doesn't match
+    """
+    funcname = sys._getframe().f_code.co_name
+
+    # capture everything before the last dash, then unix timestamp, then suffix
+    pattern = r'^(.+)-(\d{10,})(\..+)$'
+
+    match = re.match(pattern, filename)
+    if match:
+        prefix = match.group(1)
+        timestamp = match.group(2)
+        suffix = match.group(3)
+        return prefix, timestamp, suffix
+
+    return None
+
+
 def determine_artefacts_to_deploy(successes, upload_policy):
     """
     Determine artefacts to deploy depending on upload policy
@@ -551,21 +575,25 @@ def determine_artefacts_to_deploy(successes, upload_policy):
         artefact_base = os.path.basename(artefact)
         log(f"{funcname}(): artefact filename: '{artefact_base}'")
 
-        # artefact name format: PAYLOAD-TIMESTAMP.tar.gz
-        # remove "-TIMESTAMP.tar.gz" (last element when splitting along '-')
-        payload = "-".join(artefact_base.split("-")[:-1])
-        log(f"{funcname}(): artefact payload '{payload}'")
+        # artefact name format: PAYLOAD-TIMESTAMP.tar(.gz|.zstd|...)
+        parse_result = parse_artefact_filename(artefact_base)
+        if parse_result:
+            prefix, timestamp, suffix = parse_result
+            payload = prefix
+            timestamp_int = int(timestamp)
 
-        # timestamp in the filename
-        timestamp = int(artefact_base.split("-")[-1][:-7])
-        log(f"{funcname}(): artefact timestamp {timestamp}")
+            log(f"{funcname}(): artefact '{artefact_base}' parsed successfully")
+            log(f"{funcname}(): payload={payload}, timestamp={timestamp_int}, suffix={suffix}")
+        else:
+            log(f"{funcname}(): artefact '{artefact_base}' parsing failed")
+            continue
 
         deploy = False
         if upload_policy == "all":
             deploy = True
         elif upload_policy == "latest":
             if payload in to_be_deployed:
-                if to_be_deployed[payload]["timestamp"] < timestamp:
+                if to_be_deployed[payload]["timestamp"] < timestamp_int:
                     # current one will be replaced
                     deploy = True
             else:
@@ -582,7 +610,9 @@ def determine_artefacts_to_deploy(successes, upload_policy):
         if deploy:
             to_be_deployed[artefact] = {"job_dir": job["job_dir"],
                                         "pr_comment_id": job["pr_comment_id"],
-                                        "timestamp": timestamp}
+                                        "payload": payload,
+                                        "timestamp": timestamp_int,
+                                        "suffix": suffix}
 
     return to_be_deployed
 
@@ -651,6 +681,5 @@ def deploy_built_artefacts(pr, event_info):
 
     for artefact, job in to_be_deployed.items():
         job_dir = job['job_dir']
-        timestamp = job['timestamp']
         pr_comment_id = job['pr_comment_id']
-        upload_artefact(job_dir, artefact, timestamp, repo_name, pr.number, pr_comment_id)
+        upload_artefact(job_dir, artefact, repo_name, pr.number, pr_comment_id)
