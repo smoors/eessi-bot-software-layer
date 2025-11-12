@@ -236,14 +236,14 @@ def append_artefact_to_upload_log(artefact, job_dir):
         upload_log.write(f"{job_plus_artefact}\n")
 
 
-def upload_artefact(job_dir, payload, timestamp, repo_name, pr_number, pr_comment_id):
+def upload_artefact(job_dir, artefact, timestamp, repo_name, pr_number, pr_comment_id):
     """
     Upload artefact to an S3 bucket.
 
     Args:
         job_dir (string): path to the job directory
-        payload (string): can be any name describing the payload, e.g., for
-            EESSI it could have the format eessi-VERSION-COMPONENT-OS-ARCH
+        artefact (string): can be any filename that contains the payload, e.g., for
+            EESSI it could have the format eessi-VERSION-COMPONENT-OS-ARCH-TIMESTAMP.tar.zstd
         timestamp (int): timestamp of the artefact
         repo_name (string): repository of the pull request
         pr_number (int): number of the pull request
@@ -254,7 +254,6 @@ def upload_artefact(job_dir, payload, timestamp, repo_name, pr_number, pr_commen
     """
     funcname = sys._getframe().f_code.co_name
 
-    artefact = f"{payload}-{timestamp}.tar.gz"
     abs_path = os.path.join(job_dir, artefact)
     log(f"{funcname}(): uploading '{abs_path}'")
 
@@ -581,9 +580,9 @@ def determine_artefacts_to_deploy(successes, upload_policy):
                     f"{indent_fname}has been uploaded through '{uploaded}'")
 
         if deploy:
-            to_be_deployed[payload] = {"job_dir": job["job_dir"],
-                                       "pr_comment_id": job["pr_comment_id"],
-                                       "timestamp": timestamp}
+            to_be_deployed[artefact] = {"job_dir": job["job_dir"],
+                                        "pr_comment_id": job["pr_comment_id"],
+                                        "timestamp": timestamp}
 
     return to_be_deployed
 
@@ -650,8 +649,8 @@ def deploy_built_artefacts(pr, event_info):
     # 4) call function to deploy a single artefact per software subdir
     repo_name = pr.base.repo.full_name
 
-    for payload, job in to_be_deployed.items():
+    for artefact, job in to_be_deployed.items():
         job_dir = job['job_dir']
         timestamp = job['timestamp']
         pr_comment_id = job['pr_comment_id']
-        upload_artefact(job_dir, payload, timestamp, repo_name, pr.number, pr_comment_id)
+        upload_artefact(job_dir, artefact, timestamp, repo_name, pr.number, pr_comment_id)
