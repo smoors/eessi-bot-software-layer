@@ -610,8 +610,9 @@ def determine_artefacts_to_deploy(successes, upload_policy):
                     f"{indent_fname}has been uploaded through '{uploaded}'")
 
         if deploy:
-            to_be_deployed[artefact] = {"job_dir": job["job_dir"],
+            to_be_deployed[payload] = {"job_dir": job["job_dir"],
                                         "pr_comment_id": job["pr_comment_id"],
+                                        "artefact": artefact,
                                         "payload": payload,
                                         "timestamp": timestamp_int,
                                         "suffix": suffix}
@@ -681,7 +682,8 @@ def deploy_built_artefacts(pr, event_info):
     # 4) call function to deploy a single artefact per software subdir
     repo_name = pr.base.repo.full_name
 
-    for artefact, job in to_be_deployed.items():
+    for job in to_be_deployed.values():
         job_dir = job['job_dir']
         pr_comment_id = job['pr_comment_id']
+        artefact = job['artefact']
         upload_artefact(job_dir, artefact, repo_name, pr.number, pr_comment_id)
