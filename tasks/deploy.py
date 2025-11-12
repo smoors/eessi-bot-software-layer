@@ -533,11 +533,13 @@ def parse_artefact_filename(filename):
 
     match = re.match(pattern, filename)
     if match:
+        log(f"{funcname}(): parsing '{filename}' matched")
         prefix = match.group(1)
         timestamp = match.group(2)
         suffix = match.group(3)
         return prefix, timestamp, suffix
 
+    log(f"{funcname}(): parsing '{filename}' did NOT match")
     return None
 
 
