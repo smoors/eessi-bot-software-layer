@@ -611,11 +611,11 @@ def determine_artefacts_to_deploy(successes, upload_policy):
 
         if deploy:
             to_be_deployed[payload] = {"job_dir": job["job_dir"],
-                                        "pr_comment_id": job["pr_comment_id"],
-                                        "artefact": artefact,
-                                        "payload": payload,
-                                        "timestamp": timestamp_int,
-                                        "suffix": suffix}
+                                       "pr_comment_id": job["pr_comment_id"],
+                                       "artefact": artefact,
+                                       "payload": payload,
+                                       "timestamp": timestamp_int,
+                                       "suffix": suffix}
 
     return to_be_deployed
 
