@@ -14,7 +14,7 @@ Bug fixes:
 Improvements:
 * improve security aspects due to OpenSSF Scorecard report (#347, #348, #349, #350)
 
-No changes to 'app.cfg' settings (see README.md and app.cfg.example for details):
+No changes to 'app.cfg' settings.
 
 
 v0.9.0 (22 August 2025)
