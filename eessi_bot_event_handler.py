@@ -591,6 +591,7 @@ class EESSIBotSoftwareLayer(PyGHee):
         repo_name = event_info['raw_request_body']['repository']['full_name']
         pr_number = event_info['raw_request_body']['issue']['number']
         status_table = request_bot_build_issue_comments(repo_name, pr_number)
+        self.log(f"Retrieved status table from issue comments: {status_table}")
 
         if 'last_build' in bot_command.general_args:
             # If the bot command is something like 'bot:status =last_build', then only retain the last build for each
@@ -603,10 +604,17 @@ class EESSIBotSoftwareLayer(PyGHee):
             # copied, we ignore it, since - as a result of the sorting - the second entry is always older than the
             # first
             dates = status_table['date']
+            status = status_table['status']
             timestamps = []
-            for date in dates:
-                date_object = datetime.strptime(date, "%b %d %X %Z %Y")
-                timestamps.append(int(date_object.timestamp()))
+            for date, state in zip(dates, status):
+                if state == 'finished':
+                    date_object = datetime.strptime(date, "%b %d %X %Z %Y")
+                    timestamps.append(int(date_object.timestamp()))
+                else:
+                    # Add the oldest date possible, so that ongoing builds only show up if there was no other
+                    # completed build yet
+                    timestamps.append(0)
+
             status_table['timestamp'] = timestamps
 
             # Figure out the sorting indices, so that things are sorted first by the 'for arch', and then by 'date'
@@ -625,7 +633,17 @@ class EESSIBotSoftwareLayer(PyGHee):
                 'on arch': [], 'for arch': [], 'for repo': [], 'date': [], 'status': [], 'url': [], 'result': []
             }
             for x in range(0, len(sorted_table['date'])):
-                if sorted_table['for arch'][x] not in status_table_last['for arch']:
+                # Check if the current 'for arch' AND 'for repo' are already in the status_table_last. If not, add it
+                already_present = False
+                for y in range(0, len(status_table_last['for arch'])):
+                    if (
+                        sorted_table['for arch'][x] == status_table_last['for arch'][y]
+                        and sorted_table['for repo'][x] == status_table_last['for repo'][y]
+                    ):
+                        already_present = True
+                        # One match is enough, we don't append in this case, no need to look further
+                        break
+                if not already_present:
                     self.log(f"arch: {sorted_table['for arch'][x]} not yet in status_table_last")
                     for key in status_table_last:
                         self.log(f"Adding to '{key}' and the value {sorted_table[key][x]}")

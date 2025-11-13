@@ -11,7 +11,7 @@
 # license: GPLv2
 #
 PyGithub
-Waitress
-cryptography
+Waitress>=3.0.1 # required to fix vulnerabilities detected by scorecards
+cryptography>=44.0.1 # required to fix vulnerabilities detected by scorecards
 PyGHee>=0.0.3
 retry
