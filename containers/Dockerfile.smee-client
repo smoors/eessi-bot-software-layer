@@ -1,12 +1,18 @@
-ARG smee_client_version=4.4.1
-# ARG smee_client_version_commit=b837fa85fd05853731160e21356ffd30c8c3e791 # v4.4.1
-
-# pinning base image to specific hash (corresponding to lts-alpine)
+# pin base image to specific hash (corresponding to lts-alpine)
 FROM node@sha256:f36fed0b2129a8492535e2853c64fbdbd2d29dc1219ee3217023ca48aebd3787
-ARG smee_client_version
-# ARG smee_client_version_commit
 
-# Then install
-RUN npm install --global smee-client@${smee_client_version}
+# create app dir for locked installation
+WORKDIR /app
+
+# copy lockfile and manifest
+COPY containers/package.json containers/package-lock.json ./
+
+# install exactly what's in the lockfile (change version in package.json and update
+# lockfile via 'npm install --package-lock-only')
+RUN npm ci --omit=dev
+
+# expose CLI by symlinking
+RUN ln -sf /app/node_modules/.bin/smee /usr/local/bin/smee
+
 ENTRYPOINT ["smee"]
 CMD ["--help"]
