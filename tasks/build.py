@@ -1215,7 +1215,7 @@ def request_bot_build_issue_comments(repo_name, pr_number):
     try:
         while url:
             response = requests.get(url, params={'per_page': 100})
-            respone.raise_for_status()
+            response.raise_for_status()
 
             all_comments.extend(response.json())
             # get next URL from Link header in response (we are done if that is empty)
