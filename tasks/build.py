@@ -34,7 +34,7 @@ from pyghee.utils import error, log
 # Local application imports (anything from EESSI/eessi-bot-software-layer)
 from tools import config, cvmfs_repository, job_metadata, pr_comments, run_cmd
 import tools.filter as tools_filter
-from tools.pr_comments import ChatLevels, create_comment
+from tools.pr_comments import ChatLevels, create_comment, update_comment
 from tools.build_params import BUILD_PARAM_ARCH, BUILD_PARAM_ACCEL
 
 # defaults (used if not specified via, eg, 'app.cfg')
@@ -51,7 +51,9 @@ _ERROR_NONE = "none"
 # other constants
 EXPORT_VARS_FILE = 'export_vars.sh'
 
-Job = namedtuple('Job', ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator'))
+
+Job = namedtuple('Job',
+                 ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator', 'owner'))
 
 # global repo_cfg
 repo_cfg = {}
@@ -107,6 +109,10 @@ def get_build_env_cfg(cfg):
     submit_command = buildenv.get(config.BUILDENV_SETTING_SUBMIT_COMMAND)
     log(f"{fn}(): submit_command '{submit_command}'")
     config_data[config.BUILDENV_SETTING_SUBMIT_COMMAND] = submit_command
+
+    cancel_command = buildenv.get(config.BUILDENV_SETTING_CANCEL_COMMAND)
+    log(f"{fn}(): cancel_command '{cancel_command}'")
+    config_data[config.BUILDENV_SETTING_CANCEL_COMMAND] = cancel_command
 
     job_handover_protocol = buildenv.get(config.BUILDENV_SETTING_JOB_HANDOVER_PROTOCOL)
     slurm_params = buildenv.get(config.BUILDENV_SETTING_SLURM_PARAMS)
@@ -582,6 +588,8 @@ def prepare_jobs(pr, cfg, event_info, action_filter, build_params):
     base_branch_name = pr.base.ref
     log(f"{fn}(): pr.base.repo.ref '{base_branch_name}'")
 
+    job_owner = event_info['raw_request_body']['sender']['login']
+
     # create run dir (base directory for potentially several jobs)
     # TODO may still be too early (before we get to any actual job being
     #      prepared below when calling 'download_pr')
@@ -689,7 +697,7 @@ def prepare_jobs(pr, cfg, event_info, action_filter, build_params):
 
             # enlist jobs to proceed
             job = Job(job_dir, partition_info['cpu_subdir'], repo_id, partition_info['slurm_params'], year_month,
-                      pr_id, accelerator)
+                      pr_id, accelerator, job_owner)
             jobs.append(job)
 
     log(f"{fn}(): {len(jobs)} jobs to proceed after applying white list")
@@ -1358,3 +1366,132 @@ def request_bot_build_issue_comments(repo_name, pr_number):
         if len(comments) != 100:
             break
     return status_table
+
+
+def get_job_ids(action_filter):
+    """
+    Gets and validates 'jobid:' arguments.
+
+    Args:
+        action_filter (EESSIBotActionFilter): Instance containing 'jobid:' arguments
+
+    Returns:
+        job_ids (list): valid 'jobid:' arguments
+    """
+    fn = sys._getframe().f_code.co_name
+
+    # Get 'jobid:' arguments
+    job_filter = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_JOB)
+    if not job_filter:
+        log(f"{fn}(): bot: cancel needs at least one 'jobid:' argument.")
+        return []
+
+    # Validate job IDs
+    job_ids = []
+    for job_id in job_filter:
+        try:
+            if int(job_id) > 0:
+                job_ids.append(job_id)
+            else:
+                log(f"{fn}(): Invalid job ID: '{job_id}'")
+        except Exception as e:
+            log(f"{fn}(): Invalid job ID: {e}")
+
+    return job_ids
+
+
+def get_work_dirs(job_ids, cfg):
+    """
+    Gets working directories of build jobs.
+
+    Args:
+        job_ids (list): list of job_ids to check.
+        cfg (ConfigParser): Instance containing full configuration from app.cfg
+
+    Returns:
+        work_dirs (dict): dict mapping each job_id to its work_dir
+    """
+
+    buildenv = get_build_env_cfg(cfg)
+    poll_command = cfg[config.SECTION_JOB_MANAGER][config.JOB_MANAGER_SETTING_POLL_COMMAND]
+    job_name = buildenv[config.BUILDENV_SETTING_JOB_NAME]
+
+    user = os.getenv("USER", None)
+    if user is None:
+        raise Exception("Environment variable $USER is not set.")
+
+    # squeue only the given job IDs
+    cs_jobs = ",".join(job_ids)
+    command_line = f"{poll_command} --noheader --Format=JobId:0@,WorkDir:0 --user={user} --job={cs_jobs}"
+    if job_name:
+        command_line += f" --name={job_name}"
+    out, err, exit_code = run_cmd(command_line, "Get WorkDirs of jobs")
+
+    # All output lines are formatted as '{job_id}@{work_dir}'
+    work_dirs = {}
+    for line in out.split("\n"):
+        job = [field.strip() for field in line.split("@")]
+        if len(job) != 2:
+            continue
+        work_dirs[job[0]] = job[1]
+
+    return work_dirs
+
+
+def cancel_jobs(jobs, user, pr, cfg):
+    """
+    Cancels a list of build jobs.
+
+    Args:
+        jobs (list): (job_id, work_dir) tuples of the jobs to cancel
+        user (str): The user who sent the 'bot: cancel' command
+        pr (github.PullRequest.PullRequest): instance representing the pull request
+        cfg (ConfigParser): Instance containing full configuration from app.cfg
+
+    Returns:
+        cancelled_jobs (list): job_ids of successfully cancelled jobs
+    """
+    fn = sys._getframe().f_code.co_name
+
+    buildenv = get_build_env_cfg(cfg)
+    cancel_command = buildenv[config.BUILDENV_SETTING_CANCEL_COMMAND]
+
+    cancelled_jobs = []
+    for job_id, work_dir in jobs:
+        # Get job owner and PR comment ID from metadata
+        metadata_path = os.path.join(work_dir, f"_bot_job{job_id}.metadata")
+        metadata = job_metadata.get_section_from_file(
+            filepath=metadata_path,
+            section=job_metadata.JOB_PR_SECTION,
+        )
+        job_owner = metadata.get(job_metadata.JOB_PR_JOB_OWNER)
+        pr_comment_id = metadata.get(job_metadata.JOB_PR_PR_COMMENT_ID)
+
+        # Only the job owner should be able to cancel a job
+        if job_owner != user:
+            log(f"{fn}(): User {user} did not start job {job_id} - skipping cancellation")
+            continue
+        log(f"{fn}(): Job {job_id} was started by user {user} - cancelling job")
+
+        # Cancel job
+        command_line = f"{cancel_command} --verbose {job_id}"
+        out, err, exit_code = run_cmd(command_line, f"cancel job {job_id}", raise_on_error=False)
+
+        # Check if command was successful
+        if exit_code != 0:
+            log(f"{fn}(): scancel resulted in a non-zero exit code for job {job_id}.")
+            continue
+        if any([line.startswith("scancel: error: ") for line in err.split("\n")]):
+            log(f"{fn}(): Unable to cancel job {job_id}.")
+            continue
+
+        log(f"{fn}(): Cancelled job {job_id}")
+
+        # Update job status table
+        dt = datetime.now(timezone.utc)
+        update = f"\n|{dt.strftime("%b %d %X %Z %Y")}|finished|job id `{job_id}` was cancelled|"
+        update_comment(int(pr_comment_id), pr, update)
+
+        cancelled_jobs.append(job_id)
+
+    return cancelled_jobs

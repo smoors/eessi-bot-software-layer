@@ -549,6 +549,12 @@ submit_command = /usr/bin/sbatch
 `submit_command` is the full path to the Slurm job submission command used for submitting batch jobs. You may want to verify if `sbatch` is provided at that path or determine its actual location (using `which sbatch`).
 
 ```ini
+cancel_command = /usr/bin/scancel
+```
+
+`cancel_command` is the full path to the Slurm command used for cancelling batch jobs. You may want to verify if `scancel` is provided at that path or determine its actual location (using `which scancel`).
+
+```ini
 build_permission = -NOT_ALLOWED_GH_ACCOUNT_NAME- [...]
 ```
 

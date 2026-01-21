@@ -155,6 +155,9 @@ slurm_params = --hold
 # full path to the job submission command
 submit_command = /usr/bin/sbatch
 
+# full path to the job cancellation command
+cancel_command = /usr/bin/scancel
+
 # defines which GitHub accounts have the permission to trigger
 # build jobs, i.e., for which accounts the bot acts on `bot: build ...`
 # commands. If the value is left empty, everyone can trigger build jobs.

@@ -29,8 +29,8 @@ import waitress
 
 # Local application imports (anything from EESSI/eessi-bot-software-layer)
 from connections import github
-from tasks.build import check_build_permission, get_node_types, request_bot_build_issue_comments, \
-    submit_build_jobs
+from tasks.build import cancel_jobs, check_build_permission, get_job_ids, get_work_dirs, \
+    get_node_types, request_bot_build_issue_comments, submit_build_jobs
 from tasks.deploy import deploy_built_artefacts, determine_job_dirs
 from tasks.clean_up import move_to_trash_bin
 from tools import config
@@ -53,6 +53,7 @@ REQUIRED_CONFIG = {
         config.BUILDENV_SETTING_BUILD_JOB_SCRIPT,                  # required
         config.BUILDENV_SETTING_BUILD_LOGS_DIR,                    # optional+recommended
         config.BUILDENV_SETTING_BUILD_PERMISSION,                  # optional+recommended
+        config.BUILDENV_SETTING_CANCEL_COMMAND,                    # required
         config.BUILDENV_SETTING_CONTAINER_CACHEDIR,                # optional+recommended
         # config.BUILDENV_SETTING_CLONE_GIT_REPO_VIA,                # optional
         # config.BUILDENV_SETTING_CVMFS_CUSTOMIZATIONS,              # optional
@@ -102,6 +103,7 @@ REQUIRED_CONFIG = {
     # the poll interval setting is required for the alternative job handover
     # protocol (delayed_begin)
     config.SECTION_JOB_MANAGER: [
+        config.JOB_MANAGER_SETTING_POLL_COMMAND,                   # required
         config.JOB_MANAGER_SETTING_POLL_INTERVAL],                 # required
     config.SECTION_REPO_TARGETS: [
         config.REPO_TARGETS_SETTING_REPOS_CFG_DIR],                # required
@@ -507,7 +509,7 @@ class EESSIBotSoftwareLayer(PyGHee):
         help_msg += "\n  - Commands must be sent with a **new** comment (edits of existing comments are ignored)."
         help_msg += "\n  - A comment may contain multiple commands, one per line."
         help_msg += "\n  - Every command begins at the start of a line and has the syntax `bot: COMMAND [ARGUMENTS]*`"
-        help_msg += "\n  - Currently supported COMMANDs are: `help`, `build`, `show_config`, `status`"
+        help_msg += "\n  - Currently supported COMMANDs are: `help`, `build`, `show_config`, `status`, `cancel`"
         help_msg += "\n"
         help_msg += "\n  For more information, see https://www.eessi.io/docs/bot"
         return help_msg
@@ -678,6 +680,64 @@ class EESSIBotSoftwareLayer(PyGHee):
             return f"\n  - added status comment {issue_comment.html_url}"
         else:
             return "\n  - failed to create status comment"
+
+    def handle_bot_command_cancel(self, event_info, bot_command):
+        """
+        Handles bot command 'cancel' by parsing 'jobid:' arguments and
+        cancelling the jobs.
+
+        Args:
+            event_info (dict): event received by event_handler
+            bot_command (EESSIBotCommand): command to be handled
+
+        Returns:
+            comment (string): list of cancelled jobs if any, error message if not
+        """
+        self.log("processing bot command 'cancel'")
+
+        request_body = event_info["raw_request_body"]
+        repo_name = request_body["repository"]["full_name"]
+        pr_number = request_body["issue"]["number"]
+        user = request_body["comment"]["user"]["login"]
+
+        gh = github.get_instance()
+        pr = gh.get_repo(repo_name).get_pull(pr_number)
+
+        # Jobs can only be cancelled by the user who submitted the job
+        # -> No need to proceed if user cannot submit jobs
+        if not check_build_permission(pr, event_info):
+            self.log(f"User '{user}' does not have build permission - skipping cancellation.")
+            return f"\n  - User '{user}' cannot submit build jobs."
+
+        # Get valid 'jobid:' arguments
+        job_ids = get_job_ids(bot_command.action_filters)
+        if len(job_ids) == 0:
+            self.log("Got no valid job IDs")
+            return "\n  - No valid job IDs were given."
+
+        # Get working directories of jobs
+        work_dirs = get_work_dirs(job_ids, self.cfg)
+        if len(work_dirs) == 0:
+            self.log("None of the given jobs are cancellable")
+            return "\n  - No cancellable jobs were given."
+
+        # Log skipped jobs
+        jobs = []
+        for job_id in job_ids:
+            if job_id in work_dirs:
+                jobs.append((job_id, work_dirs.get(job_id)))
+            else:
+                log(f"Skipping job {job_id} - not found")
+
+        # Cancel jobs
+        cancelled_jobs = cancel_jobs(jobs, user, pr, self.cfg)
+        if len(cancelled_jobs) == 0:
+            return "\n  - No jobs were cancelled."
+        else:
+            comment = ""
+            for job_id in cancelled_jobs:
+                comment += f"\n  - cancelled job `{job_id}`"
+            return comment
 
     def start(self, app, port=3000):
         """
