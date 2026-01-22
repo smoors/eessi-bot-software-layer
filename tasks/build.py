@@ -33,6 +33,7 @@ import sys
 from pyghee.utils import error, log
 
 # Local application imports (anything from EESSI/eessi-bot-software-layer)
+from connections import github
 from tools import config, cvmfs_repository, job_metadata, pr_comments, run_cmd
 import tools.filter as tools_filter
 from tools.pr_comments import ChatLevels, create_comment
@@ -1204,6 +1205,8 @@ def request_bot_build_issue_comments(repo_name, pr_number):
 
     status_table = {'on arch': [], 'for arch': [], 'for repo': [], 'date': [], 'status': [], 'url': [], 'result': []}
     cfg = config.read_config()
+    github_section = cfg.get(config.SECTION_GITHUB)
+    api_timeout = cfg.get(config.GITHUB_SETTING_API_TIMEOUT, 10)
 
     # for loop because github has max 100 items per request.
     # if the pr has more than 100 comments we need to use per_page
@@ -1212,9 +1215,19 @@ def request_bot_build_issue_comments(repo_name, pr_number):
     url = f'https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments'
     all_comments = []
 
+    # call get_instance() to obtain a (new) token (accessible via token())
+    #   get_instance ensures that the token is renewed if the current one is no
+    #   longer valid or valid for less than 30 minutes
+    _ = github.get_instance()
     try:
         while url:
-            response = requests.get(url, params={'per_page': 100})
+            headers = {
+                'Authorization': f'Bearer {token()}',
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+
+            response = requests.get(url, params={'per_page': 100}, timeout=api_timeout)
             response.raise_for_status()
 
             all_comments.extend(response.json())

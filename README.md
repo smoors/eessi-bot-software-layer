@@ -343,6 +343,12 @@ The example file (`app.cfg.example`) includes notes on what you have to adjust t
 The section `[github]` contains information for connecting to GitHub:
 
 ```ini
+api_timeout = 10
+```
+
+Time limit for requests to GitHub's REST API.
+
+```ini
 app_id = 123456
 ```
 
