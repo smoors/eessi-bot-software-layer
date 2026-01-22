@@ -1222,7 +1222,7 @@ def request_bot_build_issue_comments(repo_name, pr_number):
     try:
         while url:
             headers = {
-                'Authorization': f'Bearer {token()}',
+                'Authorization': f'Bearer {github.token()}',
                 'Accept': 'application/vnd.github+json',
                 'X-GitHub-Api-Version': '2022-11-28'
             }
