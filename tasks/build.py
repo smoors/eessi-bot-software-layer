@@ -28,6 +28,7 @@ import requests
 import shutil
 import string
 import sys
+import time
 
 # Third party imports (anything installed into the local Python environment)
 from pyghee.utils import error, log
@@ -1205,8 +1206,9 @@ def request_bot_build_issue_comments(repo_name, pr_number):
 
     status_table = {'on arch': [], 'for arch': [], 'for repo': [], 'date': [], 'status': [], 'url': [], 'result': []}
     cfg = config.read_config()
-    github_section = cfg.get(config.SECTION_GITHUB)
-    api_timeout = cfg.get(config.GITHUB_SETTING_API_TIMEOUT, 10)
+    github_section = cfg[config.SECTION_GITHUB]
+    api_timeout = int(github_section.get(config.GITHUB_SETTING_API_TIMEOUT, 10))
+
 
     # for loop because github has max 100 items per request.
     # if the pr has more than 100 comments we need to use per_page
@@ -1215,24 +1217,33 @@ def request_bot_build_issue_comments(repo_name, pr_number):
     url = f'https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments'
     all_comments = []
 
-    # call get_instance() to obtain a (new) token (accessible via token())
+    # call get_instance() to obtain a (new) token (accessible via github.token().token)
     #   get_instance ensures that the token is renewed if the current one is no
     #   longer valid or valid for less than 30 minutes
     _ = github.get_instance()
     try:
         while url:
             headers = {
-                'Authorization': f'Bearer {github.token()}',
+                'Authorization': f'Bearer {github.token().token}',
                 'Accept': 'application/vnd.github+json',
                 'X-GitHub-Api-Version': '2022-11-28'
             }
 
-            response = requests.get(url, params={'per_page': 100}, timeout=api_timeout)
+            response = requests.get(url, headers=headers, params={'per_page': 100}, timeout=api_timeout)
             response.raise_for_status()
 
             all_comments.extend(response.json())
             # get next URL from Link header in response (we are done if that is empty)
             url = response.links.get('next', {}).get('url')
+            log(f"{fn}(): more comments? {url!r}")
+            reset_time = int(response.headers.get('X-RateLimit-Reset'))
+            utc_time = datetime.fromtimestamp(reset_time, tz=timezone.utc)
+            time_left = int(reset_time - time.time())
+            log(f"{fn}(): limits with token '{github.token().token[:4]}...':\n"
+                f"    rate limit.: {response.headers.get('X-RateLimit-Limit')}\n"
+                f"    remaining..: {response.headers.get('X-RateLimit-Remaining')}\n"
+                f"    reset limit: {utc_time.strftime('%b %d %I:%M:%S %p UTC %Y')} (in {time_left} seconds)\n"
+                )
 
     except Exception as err:
         log(f"{fn}(): obtaining comments for PR {pr_number} in repo {repo_name!r} failed: {err}")
