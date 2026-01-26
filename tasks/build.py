@@ -1381,7 +1381,7 @@ def get_job_ids(action_filter):
     fn = sys._getframe().f_code.co_name
 
     # Get 'jobid:' arguments
-    job_filter = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_JOB)
+    job_filter = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_JOBID)
     if not job_filter:
         log(f"{fn}(): 'bot: cancel' command needs at least one 'jobid:' argument.")
         return []
