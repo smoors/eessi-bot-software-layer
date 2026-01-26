@@ -1383,7 +1383,7 @@ def get_job_ids(action_filter):
     # Get 'jobid:' arguments
     job_filter = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_JOB)
     if not job_filter:
-        log(f"{fn}(): bot: cancel needs at least one 'jobid:' argument.")
+        log(f"{fn}(): 'bot: cancel' command needs at least one 'jobid:' argument.")
         return []
 
     # Validate job IDs
@@ -1394,8 +1394,8 @@ def get_job_ids(action_filter):
                 job_ids.append(job_id)
             else:
                 log(f"{fn}(): Invalid job ID: '{job_id}'")
-        except Exception as e:
-            log(f"{fn}(): Invalid job ID: {e}")
+        except Exception as err:
+            log(f"{fn}(): Invalid job ID: {err}")
 
     return job_ids
 
