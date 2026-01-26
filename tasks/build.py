@@ -1489,7 +1489,7 @@ def cancel_jobs(jobs, user, pr, cfg):
 
         # Update job status table
         dt = datetime.now(timezone.utc)
-        update = f"\n|{dt.strftime("%b %d %X %Z %Y")}|finished|job id `{job_id}` was cancelled|"
+        update = f"\n|{dt.strftime('%b %d %X %Z %Y')}|finished|job id `{job_id}` was cancelled|"
         update_comment(int(pr_comment_id), pr, update)
 
         cancelled_jobs.append(job_id)
