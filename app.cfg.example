@@ -18,6 +18,9 @@
 # Also see documentation at https://github.com/EESSI/eessi-bot-software-layer/blob/main/README.md#step5.5
 
 [github]
+# API timeout, time limit for requests to GitHub's REST API
+api_timeout = 10
+
 # replace '123456' with the ID of your GitHub App; see https://github.com/settings/apps
 app_id = 123456
 

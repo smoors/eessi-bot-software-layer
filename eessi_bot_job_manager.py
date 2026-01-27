@@ -57,6 +57,7 @@ REQUIRED_CONFIG = {
         config.FINISHED_JOB_COMMENTS_SETTING_JOB_RESULT_UNKNOWN_FMT,  # required
         config.FINISHED_JOB_COMMENTS_SETTING_JOB_TEST_UNKNOWN_FMT],   # required
     config.SECTION_GITHUB: [
+        # config.GITHUB_SETTING_API_TIMEOUT,                            # unused
         config.GITHUB_SETTING_APP_ID,                                 # required
         # config.GITHUB_SETTING_APP_NAME,                               # unused
         config.GITHUB_SETTING_INSTALLATION_ID,                        # required

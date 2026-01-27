@@ -95,6 +95,7 @@ REQUIRED_CONFIG = {
     config.SECTION_EVENT_HANDLER: [
         config.EVENT_HANDLER_SETTING_LOG_PATH],                    # required
     config.SECTION_GITHUB: [
+        config.GITHUB_SETTING_API_TIMEOUT,                         # required
         config.GITHUB_SETTING_APP_ID,                              # required
         config.GITHUB_SETTING_APP_NAME,                            # required
         config.GITHUB_SETTING_INSTALLATION_ID,                     # required
