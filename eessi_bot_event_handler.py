@@ -722,15 +722,12 @@ class EESSIBotSoftwareLayer(PyGHee):
             return "\n  - No cancellable jobs were given."
 
         # Log skipped jobs
-        jobs = []
         for job_id in job_ids:
-            if job_id in work_dirs:
-                jobs.append((job_id, work_dirs.get(job_id)))
-            else:
+            if job_id not in work_dirs.keys():
                 log(f"Skipping job {job_id} - not found")
 
         # Cancel jobs
-        cancelled_jobs = cancel_jobs(jobs, user, pr, self.cfg)
+        cancelled_jobs = cancel_jobs(work_dirs, user, pr, self.cfg)
         if len(cancelled_jobs) == 0:
             return "\n  - No jobs were cancelled."
         else:

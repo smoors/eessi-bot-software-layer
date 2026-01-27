@@ -1431,10 +1431,10 @@ def get_work_dirs(job_ids, cfg):
 
 def cancel_jobs(jobs, user, pr, cfg):
     """
-    Cancels a list of build jobs.
+    Cancels the given build jobs.
 
     Args:
-        jobs (list): (job_id, work_dir) tuples of the jobs to cancel
+        jobs (dict): dictionary mapping each job_id to cancel to its work_dir
         user (str): The user who sent the 'bot: cancel' command
         pr (github.PullRequest.PullRequest): instance representing the pull request
         cfg (ConfigParser): Instance containing full configuration from app.cfg
@@ -1448,7 +1448,7 @@ def cancel_jobs(jobs, user, pr, cfg):
     cancel_command = buildenv[config.BUILDENV_SETTING_CANCEL_COMMAND]
 
     cancelled_jobs = []
-    for job_id, work_dir in jobs:
+    for job_id, work_dir in jobs.items():
         # Get job owner and PR comment ID from metadata
         metadata_path = os.path.join(work_dir, f"_bot_job{job_id}.metadata")
         metadata = job_metadata.get_section_from_file(
