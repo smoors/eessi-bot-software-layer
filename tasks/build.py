@@ -1411,20 +1411,11 @@ def get_work_dirs(job_ids, cfg):
     Returns:
         work_dirs (dict): dict mapping each job_id to its work_dir
     """
-
-    buildenv = get_build_env_cfg(cfg)
     poll_command = cfg[config.SECTION_JOB_MANAGER][config.JOB_MANAGER_SETTING_POLL_COMMAND]
-    job_name = buildenv[config.BUILDENV_SETTING_JOB_NAME]
-
-    user = os.getenv("USER", None)
-    if user is None:
-        raise Exception("Environment variable $USER is not set.")
 
     # squeue only the given job IDs
     cs_jobs = ",".join(job_ids)
-    command_line = f"{poll_command} --noheader --Format=JobId:0@,WorkDir:0 --user={user} --job={cs_jobs}"
-    if job_name:
-        command_line += f" --name={job_name}"
+    command_line = f"{poll_command} --noheader --Format=JobId:0@,WorkDir:0 --job={cs_jobs}"
     out, err, exit_code = run_cmd(command_line, "Get WorkDirs of jobs")
 
     # All output lines are formatted as '{job_id}@{work_dir}'
