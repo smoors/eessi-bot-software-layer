@@ -555,6 +555,12 @@ submit_command = /usr/bin/sbatch
 `submit_command` is the full path to the Slurm job submission command used for submitting batch jobs. You may want to verify if `sbatch` is provided at that path or determine its actual location (using `which sbatch`).
 
 ```ini
+cancel_command = /usr/bin/scancel
+```
+
+`cancel_command` is the full path to the Slurm command used for cancelling batch jobs. You may want to verify if `scancel` is provided at that path or determine its actual location (using `which scancel`).
+
+```ini
 build_permission = -NOT_ALLOWED_GH_ACCOUNT_NAME- [...]
 ```
 
@@ -566,11 +572,11 @@ name on GitHub. Thus, one could not - by accident - give build permissions to an
 unknown account.
 
 ```ini
-no_build_permission_comment = The `bot: build ...` command has been used by user `{build_labeler}`, but this person does not have permission to trigger builds.
+no_build_permission_comment = GH account `{build_labeler}` is not authorized to trigger or cancel build jobs.
 ```
 
 `no_build_permission_comment` defines a comment (template) that is used when
-the account trying to trigger build jobs has no permission to do so.
+the account trying to trigger or cancel build jobs has no permission to do so.
 
 ```ini
 allow_update_submit_opts = false

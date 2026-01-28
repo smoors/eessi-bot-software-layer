@@ -27,13 +27,13 @@ FILTER_COMPONENT_ACCEL = 'accelerator'
 FILTER_COMPONENT_ARCH = 'architecture'
 FILTER_COMPONENT_EXPORT = 'exportvariable'
 FILTER_COMPONENT_INST = 'instance'
-FILTER_COMPONENT_JOB = 'job'
+FILTER_COMPONENT_JOBID = 'jobid'
 FILTER_COMPONENT_REPO = 'repository'
 FILTER_COMPONENTS = [FILTER_COMPONENT_ACCEL,
                      FILTER_COMPONENT_ARCH,
                      FILTER_COMPONENT_EXPORT,
                      FILTER_COMPONENT_INST,
-                     FILTER_COMPONENT_JOB,
+                     FILTER_COMPONENT_JOBID,
                      FILTER_COMPONENT_REPO
                      ]
 
