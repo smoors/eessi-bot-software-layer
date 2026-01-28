@@ -24,17 +24,20 @@ from datetime import datetime, timezone
 import json
 import os
 import re
+import requests
 import shutil
 import string
 import sys
+import time
 
 # Third party imports (anything installed into the local Python environment)
 from pyghee.utils import error, log
 
 # Local application imports (anything from EESSI/eessi-bot-software-layer)
+from connections import github
 from tools import config, cvmfs_repository, job_metadata, pr_comments, run_cmd
 import tools.filter as tools_filter
-from tools.pr_comments import ChatLevels, create_comment
+from tools.pr_comments import ChatLevels, create_comment, update_comment
 from tools.build_params import BUILD_PARAM_ARCH, BUILD_PARAM_ACCEL
 
 # defaults (used if not specified via, eg, 'app.cfg')
@@ -51,7 +54,9 @@ _ERROR_NONE = "none"
 # other constants
 EXPORT_VARS_FILE = 'export_vars.sh'
 
-Job = namedtuple('Job', ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator'))
+
+Job = namedtuple('Job',
+                 ('working_dir', 'arch_target', 'repo_id', 'slurm_opts', 'year_month', 'pr_id', 'accelerator', 'owner'))
 
 # global repo_cfg
 repo_cfg = {}
@@ -107,6 +112,10 @@ def get_build_env_cfg(cfg):
     submit_command = buildenv.get(config.BUILDENV_SETTING_SUBMIT_COMMAND)
     log(f"{fn}(): submit_command '{submit_command}'")
     config_data[config.BUILDENV_SETTING_SUBMIT_COMMAND] = submit_command
+
+    cancel_command = buildenv.get(config.BUILDENV_SETTING_CANCEL_COMMAND)
+    log(f"{fn}(): cancel_command '{cancel_command}'")
+    config_data[config.BUILDENV_SETTING_CANCEL_COMMAND] = cancel_command
 
     job_handover_protocol = buildenv.get(config.BUILDENV_SETTING_JOB_HANDOVER_PROTOCOL)
     slurm_params = buildenv.get(config.BUILDENV_SETTING_SLURM_PARAMS)
@@ -582,6 +591,8 @@ def prepare_jobs(pr, cfg, event_info, action_filter, build_params):
     base_branch_name = pr.base.ref
     log(f"{fn}(): pr.base.repo.ref '{base_branch_name}'")
 
+    job_owner = event_info['raw_request_body']['sender']['login']
+
     # create run dir (base directory for potentially several jobs)
     # TODO may still be too early (before we get to any actual job being
     #      prepared below when calling 'download_pr')
@@ -689,7 +700,7 @@ def prepare_jobs(pr, cfg, event_info, action_filter, build_params):
 
             # enlist jobs to proceed
             job = Job(job_dir, partition_info['cpu_subdir'], repo_id, partition_info['slurm_params'], year_month,
-                      pr_id, accelerator)
+                      pr_id, accelerator, job_owner)
             jobs.append(job)
 
     log(f"{fn}(): {len(jobs)} jobs to proceed after applying white list")
@@ -1203,158 +1214,308 @@ def request_bot_build_issue_comments(repo_name, pr_number):
 
     status_table = {'on arch': [], 'for arch': [], 'for repo': [], 'date': [], 'status': [], 'url': [], 'result': []}
     cfg = config.read_config()
+    github_section = cfg[config.SECTION_GITHUB]
+    api_timeout = int(github_section.get(config.GITHUB_SETTING_API_TIMEOUT, 10))
 
     # for loop because github has max 100 items per request.
     # if the pr has more than 100 comments we need to use per_page
     # argument at the moment the for loop is for a max of 400 comments could bump this up
-    for x in range(1, 5):
-        curl_cmd = f'curl -L https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments?per_page=100&page={x}'
-        curl_output, curl_error, curl_exit_code = run_cmd(curl_cmd, "fetch all comments")
 
-        comments = json.loads(curl_output)
+    url = f'https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments'
+    all_comments = []
 
-        for comment in comments:
-            # iterate through the comments to find the one where the status of the build was in
-            submitted_job_comments_section = cfg[config.SECTION_SUBMITTED_JOB_COMMENTS]
-            accelerator_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_WITH_ACCELERATOR]
-            instance_repo_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_INSTANCE_REPO]
-            instance_repo_re = template_to_regex(instance_repo_fmt)
-            comment_body = comment['body'].split('\n')
-            instance_repo_match = re.match(instance_repo_re, comment_body[0])
-            # Check if this body starts with an initial comment from the bot (first item is always the instance + repo
-            # it is building for)
-            # Then, check that it has at least 4 lines so that we can safely index up to that number
-            if instance_repo_match and len(comment_body) >= 4:
-                # Set some defaults
-                repo_id = ""
-                on_arch = ""
-                for_arch = ""
-                date = ""
-                status = ""
-                url = ""
-                result = ""
+    # call get_instance() to obtain a (new) token (accessible via github.token().token)
+    #   get_instance ensures that the token is renewed if the current one is no
+    #   longer valid or valid for less than 30 minutes
+    _ = github.get_instance()
+    try:
+        while url:
+            headers = {
+                'Authorization': f'Bearer {github.token().token}',
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
 
-                log(f"{fn}(): found bot build response in issue, processing...")
+            response = requests.get(url, headers=headers, params={'per_page': 100}, timeout=api_timeout)
+            response.raise_for_status()
 
-                # First, extract the repo_id
-                log(f"{fn}(): found build for repository: {instance_repo_match.group('repo_id')}")
-                repo_id = instance_repo_match.group('repo_id')
+            all_comments.extend(response.json())
+            # get next URL from Link header in response (we are done if that is empty)
+            url = response.links.get('next', {}).get('url')
+            log(f"{fn}(): more comments? {url!r}")
+            reset_time = int(response.headers.get('X-RateLimit-Reset'))
+            utc_time = datetime.fromtimestamp(reset_time, tz=timezone.utc)
+            time_left = int(reset_time - time.time())
+            log(f"{fn}(): limits with token '{github.token().token[:4]}...':\n"
+                f"    rate limit.: {response.headers.get('X-RateLimit-Limit')}\n"
+                f"    remaining..: {response.headers.get('X-RateLimit-Remaining')}\n"
+                f"    reset limit: {utc_time.strftime('%b %d %I:%M:%S %p UTC %Y')} (in {time_left} seconds)\n"
+                )
 
-                # Then, try to match the architecture we build on.
-                # First try this including accelerator, to see if one was defined
-                on_arch_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_BUILD_ON_ARCH]
-                on_arch_fmt_with_accel = on_arch_fmt.format_map(PartialFormatDict(on_accelerator=accelerator_fmt))
-                on_arch_re_with_accel = template_to_regex(on_arch_fmt_with_accel)
-                on_arch_match = re.match(on_arch_re_with_accel, comment_body[1])
+    except Exception as err:
+        log(f"{fn}(): obtaining comments for PR {pr_number} in repo {repo_name!r} failed: {err}")
+        return status_table
+
+    for comment in all_comments:
+        # iterate through the comments to find the one where the status of the build was in
+        submitted_job_comments_section = cfg[config.SECTION_SUBMITTED_JOB_COMMENTS]
+        accelerator_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_WITH_ACCELERATOR]
+        instance_repo_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_INSTANCE_REPO]
+        instance_repo_re = template_to_regex(instance_repo_fmt)
+        comment_body = comment['body'].split('\n')
+        instance_repo_match = re.match(instance_repo_re, comment_body[0])
+        # Check if this body starts with an initial comment from the bot (first item is always the instance + repo
+        # it is building for)
+        # Then, check that it has at least 4 lines so that we can safely index up to that number
+        if instance_repo_match and len(comment_body) >= 4:
+            # Set some defaults
+            repo_id = ""
+            on_arch = ""
+            for_arch = ""
+            date = ""
+            status = ""
+            url = ""
+            result = ""
+
+            log(f"{fn}(): found bot build response in issue, processing...")
+
+            # First, extract the repo_id
+            log(f"{fn}(): found build for repository: {instance_repo_match.group('repo_id')}")
+            repo_id = instance_repo_match.group('repo_id')
+
+            # Then, try to match the architecture we build on.
+            # First try this including accelerator, to see if one was defined
+            on_arch_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_BUILD_ON_ARCH]
+            on_arch_fmt_with_accel = on_arch_fmt.format_map(PartialFormatDict(on_accelerator=accelerator_fmt))
+            on_arch_re_with_accel = template_to_regex(on_arch_fmt_with_accel)
+            on_arch_match = re.match(on_arch_re_with_accel, comment_body[1])
+            if on_arch_match:
+                # Pattern with accelerator matched, append to status_table
+                log(f"{fn}(): found build on architecture: {on_arch_match.group('on_arch')}, "
+                    f"with accelerator {on_arch_match.group('accelerator')}")
+                on_arch = f"`{on_arch_match.group('on_arch')}`, `{on_arch_match.group('accelerator')}`"
+            else:
+                # Pattern with accelerator did not match, retry without accelerator
+                on_arch_re = template_to_regex(on_arch_fmt)
+                on_arch_match = re.match(on_arch_re, comment_body[1])
                 if on_arch_match:
-                    # Pattern with accelerator matched, append to status_table
-                    log(f"{fn}(): found build on architecture: {on_arch_match.group('on_arch')}, "
-                        f"with accelerator {on_arch_match.group('accelerator')}")
-                    on_arch = f"`{on_arch_match.group('on_arch')}`, `{on_arch_match.group('accelerator')}`"
+                    # Pattern without accelerator matched, append to status_table
+                    log(f"{fn}(): found build on architecture: {on_arch_match.group('on_arch')}")
+                    on_arch = f"`{on_arch_match.group('on_arch')}`"
                 else:
-                    # Pattern with accelerator did not match, retry without accelerator
-                    on_arch_re = template_to_regex(on_arch_fmt)
-                    on_arch_match = re.match(on_arch_re, comment_body[1])
-                    if on_arch_match:
-                        # Pattern without accelerator matched, append to status_table
-                        log(f"{fn}(): found build on architecture: {on_arch_match.group('on_arch')}")
-                        on_arch = f"`{on_arch_match.group('on_arch')}`"
-                    else:
-                        # This shouldn't happen: we had an instance_repo_match, but no match for the 'on architecture'
-                        msg = "Could not match regular expression for extracting the architecture to build on.\n"
-                        msg += "String to be matched:\n"
-                        msg += f"{comment_body[1]}\n"
-                        msg += "First regex attempted:\n"
-                        msg += f"{on_arch_re_with_accel.pattern}\n"
-                        msg += "Second regex attempted:\n"
-                        msg += f"{on_arch_re.pattern}\n"
-                        raise ValueError(msg)
+                    # This shouldn't happen: we had an instance_repo_match, but no match for the 'on architecture'
+                    msg = "Could not match regular expression for extracting the architecture to build on.\n"
+                    msg += "String to be matched:\n"
+                    msg += f"{comment_body[1]}\n"
+                    msg += "First regex attempted:\n"
+                    msg += f"{on_arch_re_with_accel.pattern}\n"
+                    msg += "Second regex attempted:\n"
+                    msg += f"{on_arch_re.pattern}\n"
+                    raise ValueError(msg)
 
-                # Now, do the same for the architecture we build for. I.e. first, try to match including accelerator
-                for_arch_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_BUILD_FOR_ARCH]
-                for_arch_fmt_with_accel = for_arch_fmt.format_map(PartialFormatDict(for_accelerator=accelerator_fmt))
-                for_arch_re_with_accel = template_to_regex(for_arch_fmt_with_accel)
-                for_arch_match = re.match(for_arch_re_with_accel, comment_body[2])
+            # Now, do the same for the architecture we build for. I.e. first, try to match including accelerator
+            for_arch_fmt = submitted_job_comments_section[config.SUBMITTED_JOB_COMMENTS_SETTING_BUILD_FOR_ARCH]
+            for_arch_fmt_with_accel = for_arch_fmt.format_map(PartialFormatDict(for_accelerator=accelerator_fmt))
+            for_arch_re_with_accel = template_to_regex(for_arch_fmt_with_accel)
+            for_arch_match = re.match(for_arch_re_with_accel, comment_body[2])
+            if for_arch_match:
+                # Pattern with accelerator matched, append to status_table
+                log(f"{fn}(): found build for architecture: {for_arch_match.group('for_arch')}, "
+                    f"with accelerator {for_arch_match.group('accelerator')}")
+                for_arch = f"`{for_arch_match.group('for_arch')}`, `{for_arch_match.group('accelerator')}`"
+            else:
+                # Pattern with accelerator did not match, retry without accelerator
+                for_arch_re = template_to_regex(for_arch_fmt)
+                for_arch_match = re.match(for_arch_re, comment_body[2])
                 if for_arch_match:
-                    # Pattern with accelerator matched, append to status_table
-                    log(f"{fn}(): found build for architecture: {for_arch_match.group('for_arch')}, "
-                        f"with accelerator {for_arch_match.group('accelerator')}")
-                    for_arch = f"`{for_arch_match.group('for_arch')}`, `{for_arch_match.group('accelerator')}`"
+                    # Pattern without accelerator matched, append to status_table
+                    log(f"{fn}(): found build for architecture: {for_arch_match.group('for_arch')}")
+                    for_arch = f"`{for_arch_match.group('for_arch')}`"
                 else:
-                    # Pattern with accelerator did not match, retry without accelerator
-                    for_arch_re = template_to_regex(for_arch_fmt)
-                    for_arch_match = re.match(for_arch_re, comment_body[2])
-                    if for_arch_match:
-                        # Pattern without accelerator matched, append to status_table
-                        log(f"{fn}(): found build for architecture: {for_arch_match.group('for_arch')}")
-                        for_arch = f"`{for_arch_match.group('for_arch')}`"
+                    # This shouldn't happen: we had an instance_repo_match, but no match for the 'on architecture'
+                    msg = "Could not match regular expression for extracting the architecture to build for.\n"
+                    msg += "String to be matched:\n"
+                    msg += f"{comment_body[2]}\n"
+                    msg += "First regex attempted:\n"
+                    msg += f"{for_arch_re_with_accel.pattern}\n"
+                    msg += "Second regex attempted:\n"
+                    msg += f"{for_arch_re.pattern}\n"
+                    raise ValueError(msg)
+
+            # get date, status, url and result from the markdown table
+            comment_table = comment['body'][comment['body'].find('|'):comment['body'].rfind('|')+1]
+
+            # Convert markdown table to a dictionary
+            lines = comment_table.split('\n')
+            rows = []
+            keys = []
+            for i, row in enumerate(lines):
+                values = {}
+                if i == 0:
+                    for key in row.split('|'):
+                        keys.append(key.strip())
+                elif i == 1:
+                    continue
+                else:
+                    for j, value in enumerate(row.split('|')):
+                        if j > 0 and j < len(keys) - 1:
+                            values[keys[j]] = value.strip()
+                    rows.append(values)
+
+            # add date, status, url to  status_table if
+            for row in rows:
+                if row['job status'] == 'finished':
+                    date = row['date']
+                    status = row['job status']
+                    url = comment['html_url']
+                    if 'FAILURE' in row['comment']:
+                        result = ':cry: FAILURE'
+                    elif 'SUCCESS' in row['comment']:
+                        result = ':grin: SUCCESS'
+                    elif 'UNKNOWN' in row['comment']:
+                        result = ':shrug: UNKNOWN'
                     else:
-                        # This shouldn't happen: we had an instance_repo_match, but no match for the 'on architecture'
-                        msg = "Could not match regular expression for extracting the architecture to build for.\n"
-                        msg += "String to be matched:\n"
-                        msg += f"{comment_body[2]}\n"
-                        msg += "First regex attempted:\n"
-                        msg += f"{for_arch_re_with_accel.pattern}\n"
-                        msg += "Second regex attempted:\n"
-                        msg += f"{for_arch_re.pattern}\n"
-                        raise ValueError(msg)
-
-                # get date, status, url and result from the markdown table
-                comment_table = comment['body'][comment['body'].find('|'):comment['body'].rfind('|')+1]
-
-                # Convert markdown table to a dictionary
-                lines = comment_table.split('\n')
-                rows = []
-                keys = []
-                for i, row in enumerate(lines):
-                    values = {}
-                    if i == 0:
-                        for key in row.split('|'):
-                            keys.append(key.strip())
-                    elif i == 1:
-                        continue
-                    else:
-                        for j, value in enumerate(row.split('|')):
-                            if j > 0 and j < len(keys) - 1:
-                                values[keys[j]] = value.strip()
-                        rows.append(values)
-
-                # add date, status, url to  status_table if
-                for row in rows:
-                    if row['job status'] == 'finished':
-                        date = row['date']
-                        status = row['job status']
-                        url = comment['html_url']
-                        if 'FAILURE' in row['comment']:
-                            result = ':cry: FAILURE'
-                        elif 'SUCCESS' in row['comment']:
-                            result = ':grin: SUCCESS'
-                        elif 'UNKNOWN' in row['comment']:
-                            result = ':shrug: UNKNOWN'
-                        else:
-                            result = row['comment']
-                    elif row['job status'] in ['submitted', 'received', 'running']:
-                        # Make sure that if the job is not finished yet, we also put something useful in these fields
-                        # It is useful to know a job is submitted, running, etc
-                        date = row['date']
-                        status = row['job status']
-                        url = comment['html_url']
                         result = row['comment']
-                    else:
-                        # Don't do anything for the test line for now - we might add an extra entry to the status
-                        # table later to reflect the test result
-                        continue
+                elif row['job status'] in ['submitted', 'received', 'running']:
+                    # Make sure that if the job is not finished yet, we also put something useful in these fields
+                    # It is useful to know a job is submitted, running, etc
+                    date = row['date']
+                    status = row['job status']
+                    url = comment['html_url']
+                    result = row['comment']
+                else:
+                    # Don't do anything for the test line for now - we might add an extra entry to the status
+                    # table later to reflect the test result
+                    continue
 
-                # Add all entries to status_table. We do this at the end of this loop so that the operation is
-                # more or less 'atomic', i.e. all vectors in the status_table dict have the same length
-                status_table['for repo'].append(repo_id)
-                status_table['on arch'].append(on_arch)
-                status_table['for arch'].append(for_arch)
-                status_table['date'].append(date)
-                status_table['status'].append(status)
-                status_table['url'].append(url)
-                status_table['result'].append(result)
+            # Add all entries to status_table. We do this at the end of this loop so that the operation is
+            # more or less 'atomic', i.e. all vectors in the status_table dict have the same length
+            status_table['for repo'].append(repo_id)
+            status_table['on arch'].append(on_arch)
+            status_table['for arch'].append(for_arch)
+            status_table['date'].append(date)
+            status_table['status'].append(status)
+            status_table['url'].append(url)
+            status_table['result'].append(result)
 
-        if len(comments) != 100:
-            break
     return status_table
+
+
+def get_job_ids(action_filter):
+    """
+    Gets and validates 'jobid:' arguments.
+
+    Args:
+        action_filter (EESSIBotActionFilter): Instance containing 'jobid:' arguments
+
+    Returns:
+        job_ids (list): valid 'jobid:' arguments
+    """
+    fn = sys._getframe().f_code.co_name
+
+    # Get 'jobid:' arguments
+    job_filter = action_filter.get_filter_by_component(tools_filter.FILTER_COMPONENT_JOBID)
+    if not job_filter:
+        log(f"{fn}(): 'bot: cancel' command needs at least one 'jobid:' argument.")
+        return []
+
+    # Validate job IDs
+    job_ids = []
+    for job_id in job_filter:
+        try:
+            if int(job_id) > 0:
+                job_ids.append(job_id)
+            else:
+                log(f"{fn}(): Invalid job ID: '{job_id}'")
+        except Exception as err:
+            log(f"{fn}(): Invalid job ID: {err}")
+
+    return job_ids
+
+
+def get_work_dirs(job_ids, cfg):
+    """
+    Gets working directories of build jobs.
+
+    Args:
+        job_ids (list): list of job_ids to check.
+        cfg (ConfigParser): Instance containing full configuration from app.cfg
+
+    Returns:
+        work_dirs (dict): dict mapping each job_id to its work_dir
+    """
+    poll_command = cfg[config.SECTION_JOB_MANAGER][config.JOB_MANAGER_SETTING_POLL_COMMAND]
+
+    # squeue only the given job IDs
+    cs_jobs = ",".join(job_ids)
+    command_line = f"{poll_command} --noheader --Format=JobId:0@,WorkDir:0 --job={cs_jobs}"
+    out, err, exit_code = run_cmd(command_line, "Get WorkDirs of jobs")
+
+    # All output lines are formatted as '{job_id}@{work_dir}'
+    work_dirs = {}
+    for line in out.split("\n"):
+        job = [field.strip() for field in line.split("@")]
+        if len(job) != 2:
+            continue
+        work_dirs[job[0]] = job[1]
+
+    return work_dirs
+
+
+def cancel_jobs(jobs, user, pr, cfg):
+    """
+    Cancels the given build jobs.
+
+    Args:
+        jobs (dict): dictionary mapping each job_id to cancel to its work_dir
+        user (str): The user who sent the 'bot: cancel' command
+        pr (github.PullRequest.PullRequest): instance representing the pull request
+        cfg (ConfigParser): Instance containing full configuration from app.cfg
+
+    Returns:
+        cancelled_jobs (list): job_ids of successfully cancelled jobs
+    """
+    fn = sys._getframe().f_code.co_name
+
+    buildenv = get_build_env_cfg(cfg)
+    cancel_command = buildenv[config.BUILDENV_SETTING_CANCEL_COMMAND]
+
+    cancelled_jobs = []
+    for job_id, work_dir in jobs.items():
+        # Get job owner and PR comment ID from metadata
+        metadata_path = os.path.join(work_dir, f"_bot_job{job_id}.metadata")
+        metadata = job_metadata.get_section_from_file(
+            filepath=metadata_path,
+            section=job_metadata.JOB_PR_SECTION,
+        )
+        job_owner = metadata.get(job_metadata.JOB_PR_JOB_OWNER)
+        pr_comment_id = metadata.get(job_metadata.JOB_PR_PR_COMMENT_ID)
+
+        # Only the job owner should be able to cancel a job
+        if job_owner != user:
+            log(f"{fn}(): User {user} did not start job {job_id} - skipping cancellation")
+            continue
+        log(f"{fn}(): Job {job_id} was started by user {user} - cancelling job")
+
+        # Cancel job
+        command_line = f"{cancel_command} --verbose {job_id}"
+        out, err, exit_code = run_cmd(command_line, f"cancel job {job_id}", raise_on_error=False)
+
+        # Check if command was successful
+        if exit_code != 0:
+            log(f"{fn}(): scancel resulted in a non-zero exit code for job {job_id}.")
+            continue
+        if any([line.startswith("scancel: error: ") for line in err.split("\n")]):
+            log(f"{fn}(): Unable to cancel job {job_id}.")
+            continue
+
+        log(f"{fn}(): Cancelled job {job_id}")
+
+        # Update job status table
+        dt = datetime.now(timezone.utc)
+        update = f"\n|{dt.strftime('%b %d %X %Z %Y')}|finished|job id `{job_id}` was cancelled|"
+        update_comment(int(pr_comment_id), pr, update)
+
+        cancelled_jobs.append(job_id)
+
+    return cancelled_jobs

@@ -18,6 +18,9 @@
 # Also see documentation at https://github.com/EESSI/eessi-bot-software-layer/blob/main/README.md#step5.5
 
 [github]
+# API timeout, time limit for requests to GitHub's REST API
+api_timeout = 10
+
 # replace '123456' with the ID of your GitHub App; see https://github.com/settings/apps
 app_id = 123456
 
@@ -155,13 +158,16 @@ slurm_params = --hold
 # full path to the job submission command
 submit_command = /usr/bin/sbatch
 
+# full path to the job cancellation command
+cancel_command = /usr/bin/scancel
+
 # defines which GitHub accounts have the permission to trigger
 # build jobs, i.e., for which accounts the bot acts on `bot: build ...`
 # commands. If the value is left empty, everyone can trigger build jobs.
 build_permission = -NOT_ALLOWED_GH_ACCOUNT_NAME-
 
 # template for comment when user who set a label has no permission to trigger build jobs
-no_build_permission_comment = Label `bot:build` has been set by user `{build_labeler}`, but this person does not have permission to trigger builds
+no_build_permission_comment = GH account `{build_labeler}` is not authorized to trigger or cancel build jobs.
 
 # whether or not to allow updating the submit options via custom module det_submit_opts
 # Should only be enabled (true) with care because this will result in code from the target

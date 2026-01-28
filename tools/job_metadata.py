@@ -63,6 +63,7 @@ JOB_PR_SECTION = "PR"
 JOB_PR_REPO = "repo"
 JOB_PR_PR_NUMBER = "pr_number"
 JOB_PR_PR_COMMENT_ID = "pr_comment_id"
+JOB_PR_JOB_OWNER = "job_owner"
 
 # JWD/_bot_jobJOBID.result
 JOB_RESULT_SECTION = "RESULT"
@@ -99,12 +100,14 @@ def create_metadata_file(job, job_id, pr_comment):
     repo_name = pr_comment.repo_name
     pr_number = pr_comment.pr_number
     pr_comment_id = pr_comment.pr_comment_id
+    job_owner = job.owner
 
     # create _bot_job<jobid>.metadata file in the job's working directory
     bot_jobfile = configparser.ConfigParser()
     bot_jobfile[JOB_PR_SECTION] = {'repo': repo_name,
                                    'pr_number': pr_number,
-                                   'pr_comment_id': pr_comment_id}
+                                   'pr_comment_id': pr_comment_id,
+                                   'job_owner': job_owner}
     bot_jobfile_path = os.path.join(job.working_dir, f'_bot_job{job_id}.metadata')
     with open(bot_jobfile_path, 'w') as bjf:
         bot_jobfile.write(bjf)
