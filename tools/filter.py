@@ -303,6 +303,9 @@ class EESSIBotActionFilter:
                 else:
                     check = False
                     break
+            # skip export variables: those are not action filters
+            elif af.component == FILTER_COMPONENT_EXPORT:
+                continue
             # Action filter wasn't found in the context, we won't allow this
             else:
                 check = False
